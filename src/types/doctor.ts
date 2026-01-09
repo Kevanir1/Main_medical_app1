@@ -7,6 +7,8 @@ export interface DoctorRegistrationData {
   passportNumber?: string;
   birthDate: string;
   specialization: string;
+  password: string;
+  licenseNumber: string;
 }
 
 

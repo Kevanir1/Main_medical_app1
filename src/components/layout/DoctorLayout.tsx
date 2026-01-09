@@ -1,5 +1,5 @@
 import { ReactNode, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { 
   Stethoscope, 
   LayoutDashboard, 
@@ -24,9 +24,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
 
-interface DoctorLayoutProps {
-  children: ReactNode;
-}
+interface DoctorLayoutProps {}
 
 const navigation = [
   { name: 'Dashboard', href: '/doctor', icon: LayoutDashboard },
@@ -35,7 +33,7 @@ const navigation = [
   { name: 'Historia wizyt', href: '/doctor/visits', icon: ClipboardList },
 ];
 
-export const DoctorLayout = ({ children }: DoctorLayoutProps) => {
+export const DoctorLayout = ({}: DoctorLayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -169,9 +167,11 @@ export const DoctorLayout = ({ children }: DoctorLayoutProps) => {
 
         {/* Page content */}
         <main className="p-4 lg:p-6">
-          {children}
+          <Outlet />
         </main>
       </div>
     </div>
   );
 };
+
+export default DoctorLayout;

@@ -45,14 +45,31 @@ export default function Login() {
 
     setIsLoading(true);
 
-    const response = await login(email, password);
-    console.log('Login response:', response);
-  
-    setError({
-      code: 'invalid_credentials',
-      message: 'Nieprawidłowy email lub hasło'
-    });
-    setIsLoading(false);
+    try {
+      const response = await login(email, password);
+      console.log('Login response:', response);
+
+      if (response && response.token) {
+        // Login successful, redirect based on role
+        const userRole = response.role as UserRole;
+        const redirectPath = roleRedirectPaths[userRole] || '/';
+        navigate(redirectPath);
+      } else {
+        // Login failed
+        setError({
+          code: 'invalid_credentials',
+          message: response?.message || 'Nieprawidłowy email lub hasło'
+        });
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      setError({
+        code: 'server_error',
+        message: 'Wystąpił błąd serwera. Spróbuj ponownie.'
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const getErrorStyle = () => {
