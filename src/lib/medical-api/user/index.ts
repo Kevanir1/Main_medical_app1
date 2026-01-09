@@ -1,4 +1,4 @@
-import { get, post, patch, del } from "../apiClient"
+import { get, post, patch, del } from "../../apiClient"
 import { UserRole } from "@/types/auth";
 
 type RegisterBase = {
@@ -25,3 +25,4 @@ export const registerUser = async (payload: RegisterUserPayload) => {
 export const registerDoctor = async (payload: RegisterDoctorPayload) => {
   return await post('/user/register/doctor', payload);
 }
+
