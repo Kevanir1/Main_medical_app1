@@ -9,22 +9,20 @@ export interface DoctorRegistrationData {
   specialization: string;
 }
 
-export const SPECIALIZATIONS = [
-  'Kardiologia',
-  'Neurologia',
-  'Pediatria',
-  'Dermatologia',
-  'Ortopedia',
-  'Ginekologia',
-  'Urologia',
-  'Okulistyka',
-  'Laryngologia',
-  'Psychiatria',
-  'Chirurgia ogólna',
-  'Medycyna rodzinna',
-  'Internista',
-  'Radiologia',
-  'Anestezjologia',
-] as const;
 
-export type Specialization = typeof SPECIALIZATIONS[number];
+export const specializations = {
+    'KARDIOLOGIA': 'cardiology',
+    'DERMATOLOGIA': 'dermatology',
+    'NEUROLOGIA': 'neurology',
+    'PEDIATRIA': 'pediatrics',
+    'OKULISTYKA': 'ophthalmology',
+    'ORTOPEDIA': 'orthopedics',
+    'PSYCHIATRIA': 'psychiatry',
+    'REUMATOLOGIA': 'rheumatology',
+    'GINEKOLOGIA': 'gynecology',
+    "ONKOLOGIA": 'oncology',
+    'MEDYCYNA_RODZINNA': 'general_medicine'
+}
+
+
+  export type Specialization = typeof specializations[keyof typeof specializations];
