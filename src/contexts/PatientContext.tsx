@@ -7,9 +7,6 @@ export interface PatientProfile {
   birthDate: string;
   phone: string;
   email: string;
-  street: string;
-  postalCode: string;
-  city: string;
 }
 
 export interface BookedSlot {
@@ -27,15 +24,12 @@ interface PatientContextType {
 }
 
 const defaultProfile: PatientProfile = {
-  firstName: 'Jan',
-  lastName: 'Kowalski',
-  pesel: '90010112345',
-  birthDate: '1990-01-01',
-  phone: '123456789',
-  email: 'pacjent@medapp.pl',
-  street: 'ul. Przykładowa 12/3',
-  postalCode: '00-001',
-  city: 'Warszawa'
+  firstName: '',
+  lastName: '',
+  pesel: '',
+  birthDate: '',
+  phone: '',
+  email: ''
 };
 
 const PatientContext = createContext<PatientContextType | undefined>(undefined);

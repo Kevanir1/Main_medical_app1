@@ -24,9 +24,6 @@ const patientSchema = z.object({
   email: z.string().email("Nieprawidłowy adres email"),
   password: z.string().min(8, "Hasło musi mieć minimum 8 znaków"),
   confirmPassword: z.string(),
-  street: z.string().min(3, "Podaj adres").max(100),
-  city: z.string().min(2, "Podaj miasto").max(50),
-  postalCode: z.string().regex(/^\d{2}-\d{3}$/, "Format: XX-XXX"),
   termsAccepted: z.boolean().refine((val) => val === true, {
     message: "Musisz zaakceptować regulamin"
   }),
@@ -104,12 +101,6 @@ const PatientRegistration = () => {
                 <p className="text-muted-foreground">Email</p>
                 <p className="font-medium">{formData.email}</p>
               </div>
-              <div className="col-span-2">
-                <p className="text-muted-foreground">Adres</p>
-                <p className="font-medium">
-                  {formData.street}, {formData.postalCode} {formData.city}
-                </p>
-              </div>
             </div>
 
             <div className="flex gap-3 pt-4">
@@ -178,31 +169,6 @@ const PatientRegistration = () => {
                 <Input id="email" type="email" {...register("email")} />
                 {errors.email && (
                   <p className="text-sm text-destructive">{errors.email.message}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="street">Ulica i numer *</Label>
-              <Input id="street" placeholder="ul. Przykładowa 12/3" {...register("street")} />
-              {errors.street && (
-                <p className="text-sm text-destructive">{errors.street.message}</p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="postalCode">Kod pocztowy *</Label>
-                <Input id="postalCode" placeholder="00-000" {...register("postalCode")} />
-                {errors.postalCode && (
-                  <p className="text-sm text-destructive">{errors.postalCode.message}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="city">Miasto *</Label>
-                <Input id="city" {...register("city")} />
-                {errors.city && (
-                  <p className="text-sm text-destructive">{errors.city.message}</p>
                 )}
               </div>
             </div>

@@ -15,13 +15,6 @@ const loginSchema = z.object({
   password: z.string().min(6, { message: 'Hasło musi mieć minimum 6 znaków' }),
 });
 
-// Mock users for demonstration
-const mockUsers = [
-  { email: 'admin@medapp.pl', password: 'admin123', role: 'admin' as UserRole, isBlocked: false },
-  { email: 'pacjent@medapp.pl', password: 'pacjent123', role: 'patient' as UserRole, isBlocked: false },
-  { email: 'lekarz@medapp.pl', password: 'lekarz123', role: 'doctor' as UserRole, isBlocked: false },
-  { email: 'zablokowany@medapp.pl', password: 'test123', role: 'doctor' as UserRole, isBlocked: true },
-];
 
 export default function Login() {
   const navigate = useNavigate();
@@ -54,39 +47,13 @@ export default function Login() {
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Check credentials
-    const user = mockUsers.find(u => u.email === email.toLowerCase());
-
-    if (!user) {
-      setError({
-        code: 'account_not_found',
-        message: 'Nie znaleziono konta z podanym adresem email'
-      });
-      setIsLoading(false);
-      return;
-    }
-
-    if (user.password !== password) {
-      setError({
-        code: 'invalid_credentials',
-        message: 'Nieprawidłowy email lub hasło'
-      });
-      setIsLoading(false);
-      return;
-    }
-
-    if (user.isBlocked) {
-      setError({
-        code: 'account_blocked',
-        message: 'Twoje konto zostało zablokowane. Skontaktuj się z administratorem.'
-      });
-      setIsLoading(false);
-      return;
-    }
-
-    // Success - redirect based on role
-    const redirectPath = roleRedirectPaths[user.role];
-    navigate(redirectPath);
+    // TODO: Integrate with backend API for authentication
+    // For now, show error that backend connection is required
+    setError({
+      code: 'invalid_credentials',
+      message: 'Nieprawidłowy email lub hasło'
+    });
+    setIsLoading(false);
   };
 
   const getErrorStyle = () => {
@@ -176,16 +143,6 @@ export default function Login() {
           )}
         </Button>
 
-        {/* Demo credentials */}
-        <div className="mt-6 p-4 rounded-lg bg-muted/50 text-sm">
-          <p className="font-medium mb-2">Dane testowe:</p>
-          <div className="space-y-1 text-muted-foreground">
-            <p><strong>Admin:</strong> admin@medapp.pl / admin123</p>
-            <p><strong>Pacjent:</strong> pacjent@medapp.pl / pacjent123</p>
-            <p><strong>Lekarz:</strong> lekarz@medapp.pl / lekarz123</p>
-            <p><strong>Zablokowany:</strong> zablokowany@medapp.pl / test123</p>
-          </div>
-        </div>
       </form>
     </AuthLayout>
   );
