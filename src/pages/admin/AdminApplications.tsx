@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,58 +9,8 @@ import { DoctorApplication, ApplicationStatus } from '@/types/admin';
 import { Check, X, Eye, User, Mail, Phone, Calendar, Stethoscope, CreditCard, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
+import { activateUser, deleteUser, getPendingUsers } from '@/lib/medical-api/user';
 
-// Mock data
-const mockApplications: DoctorApplication[] = [
-  { 
-    id: '1', 
-    firstName: 'Jan', 
-    lastName: 'Kowalski', 
-    email: 'jan.kowalski@example.com',
-    phone: '+48 123 456 789',
-    pesel: '85012012345',
-    birthDate: '1985-01-20',
-    specialization: 'Kardiologia',
-    status: 'pending',
-    submittedAt: '2024-01-15T10:30:00',
-  },
-  { 
-    id: '2', 
-    firstName: 'Anna', 
-    lastName: 'Nowak', 
-    email: 'anna.nowak@example.com',
-    phone: '+48 987 654 321',
-    pesel: '90062512345',
-    birthDate: '1990-06-25',
-    specialization: 'Neurologia',
-    status: 'pending',
-    submittedAt: '2024-01-14T14:20:00',
-  },
-  { 
-    id: '3', 
-    firstName: 'Piotr', 
-    lastName: 'Wiśniewski', 
-    email: 'piotr.w@example.com',
-    phone: '+48 555 666 777',
-    pesel: '88030312345',
-    birthDate: '1988-03-03',
-    specialization: 'Ortopedia',
-    status: 'approved',
-    submittedAt: '2024-01-10T09:15:00',
-  },
-  { 
-    id: '4', 
-    firstName: 'Maria', 
-    lastName: 'Zielińska', 
-    email: 'maria.z@example.com',
-    phone: '+48 111 222 333',
-    pesel: '92111112345',
-    birthDate: '1992-11-11',
-    specialization: 'Dermatologia',
-    status: 'rejected',
-    submittedAt: '2024-01-08T11:45:00',
-  },
-];
 
 const statusLabels: Record<ApplicationStatus, string> = {
   pending: 'Oczekujący',
@@ -70,45 +20,57 @@ const statusLabels: Record<ApplicationStatus, string> = {
 
 export const AdminApplications = () => {
   const { toast } = useToast();
-  const [applications, setApplications] = useState<DoctorApplication[]>(mockApplications);
+  const [applications, setApplications] = useState<DoctorApplication[]>([]);
   const [selectedApp, setSelectedApp] = useState<DoctorApplication | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await getPendingUsers();
+        if (res && res.status === 'success') {
+          const list = (res.pending_users || []).map((u: any) => ({
+            id: String(u.id),
+            firstName: '',
+            lastName: '',
+            email: u.email,
+            phone: '',
+            pesel: '',
+            birthDate: '',
+            specialization: '',
+            status: 'pending' as ApplicationStatus,
+            submittedAt: u.created_at || new Date().toISOString(),
+          } as DoctorApplication));
+          setApplications(list);
+        }
+      } catch (e) { console.error(e); }
+    };
+    load();
+  }, []);
+
   const handleApprove = async (app: DoctorApplication) => {
+    // Approve -> activate user
     setIsProcessing(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setApplications(prev => prev.map(a => 
-      a.id === app.id ? { ...a, status: 'approved' as ApplicationStatus } : a
-    ));
-    
-    toast({
-      title: "Wniosek zatwierdzony",
-      description: `Konto lekarza ${app.firstName} ${app.lastName} zostało utworzone.`,
-    });
-    
+    try {
+      await activateUser(Number(app.id));
+      setApplications(prev => prev.filter(a => a.id !== app.id));
+      toast({ title: 'Wniosek zatwierdzony', description: `Konto ${app.email} zostało aktywowane.` });
+    } catch (e) { console.error(e); }
     setIsProcessing(false);
     setShowDetailsModal(false);
   };
 
   const handleReject = async () => {
-    if (!selectedApp || !rejectReason.trim()) return;
+    if (!selectedApp) return;
     setIsProcessing(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setApplications(prev => prev.map(a => 
-      a.id === selectedApp.id ? { ...a, status: 'rejected' as ApplicationStatus } : a
-    ));
-    
-    toast({
-      title: "Wniosek odrzucony",
-      description: `Wniosek ${selectedApp.firstName} ${selectedApp.lastName} został odrzucony.`,
-      variant: "destructive",
-    });
-    
+    try {
+      await deleteUser(Number(selectedApp.id));
+      setApplications(prev => prev.filter(a => a.id !== selectedApp.id));
+      toast({ title: 'Wniosek odrzucony', description: `${selectedApp.email} został usunięty.`, variant: 'destructive' });
+    } catch (e) { console.error(e); }
     setIsProcessing(false);
     setShowRejectModal(false);
     setShowDetailsModal(false);

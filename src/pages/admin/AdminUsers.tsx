@@ -11,16 +11,10 @@ import { User, UserRole, UserStatus } from '@/types/admin';
 import { Search, Lock, Trash2, GitMerge, KeyRound, MoreHorizontal, Filter, X, AlertTriangle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
+import { getPendingUsers } from '@/lib/medical-api/user';
 
-// Mock data
-const mockUsers: User[] = [
-  { id: '1', firstName: 'Anna', lastName: 'Nowak', email: 'anna.nowak@example.com', role: 'patient', status: 'active', createdAt: '2024-01-15' },
-  { id: '2', firstName: 'Jan', lastName: 'Kowalski', email: 'jan.kowalski@example.com', role: 'doctor', status: 'active', createdAt: '2024-01-10' },
-  { id: '3', firstName: 'Maria', lastName: 'Wiśniewska', email: 'maria.w@example.com', role: 'patient', status: 'blocked', createdAt: '2024-01-08' },
-  { id: '4', firstName: 'Piotr', lastName: 'Zieliński', email: 'piotr.z@example.com', role: 'doctor', status: 'active', createdAt: '2024-01-05' },
-  { id: '5', firstName: 'Katarzyna', lastName: 'Dąbrowska', email: 'katarzyna.d@example.com', role: 'patient', status: 'active', createdAt: '2024-01-03' },
-  { id: '6', firstName: 'Tomasz', lastName: 'Lewandowski', email: 'tomasz.l@example.com', role: 'admin', status: 'active', createdAt: '2023-12-20' },
-];
+import apiClient from '@/lib/apiClient';
+import { useEffect } from 'react';
 
 type ModalType = 'block' | 'delete' | 'merge' | 'reset' | null;
 
@@ -37,7 +31,7 @@ const statusLabels: Record<UserStatus, string> = {
 
 export const AdminUsers = () => {
   const { toast } = useToast();
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -71,75 +65,50 @@ export const AdminUsers = () => {
     setReason('');
   };
 
-  const handleBlock = async () => {
-    if (!selectedUser || !reason.trim()) return;
-    setIsProcessing(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setUsers(prev => prev.map(u => 
-      u.id === selectedUser.id ? { ...u, status: 'blocked' as UserStatus } : u
-    ));
-    
-    toast({
-      title: "Konto zablokowane",
-      description: `Konto użytkownika ${selectedUser.firstName} ${selectedUser.lastName} zostało zablokowane.`,
-    });
-    
-    setIsProcessing(false);
-    closeModal();
-  };
-
   const handleDelete = async () => {
-    if (!selectedUser || !reason.trim()) return;
-    setIsProcessing(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setUsers(prev => prev.filter(u => u.id !== selectedUser.id));
-    
-    toast({
-      title: "Konto usunięte",
-      description: `Konto użytkownika ${selectedUser.firstName} ${selectedUser.lastName} zostało usunięte.`,
-      variant: "destructive",
-    });
-    
-    setIsProcessing(false);
-    closeModal();
-  };
-
-  const handleMerge = async () => {
-    if (!selectedUser || !secondaryUser) return;
-    setIsProcessing(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setUsers(prev => prev.filter(u => u.id !== secondaryUser.id));
-    
-    toast({
-      title: "Konta scalone",
-      description: `Konto ${secondaryUser.firstName} ${secondaryUser.lastName} zostało scalone z ${selectedUser.firstName} ${selectedUser.lastName}.`,
-    });
-    
-    setIsProcessing(false);
-    closeModal();
-  };
-
-  const handleResetPassword = async () => {
     if (!selectedUser) return;
     setIsProcessing(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    toast({
-      title: "Hasło zresetowane",
-      description: `Link do resetu hasła został wysłany na ${selectedUser.email}.`,
-    });
-    
+    try {
+      await apiClient.del(`/user/${selectedUser.id}`);
+      setUsers(prev => prev.filter(u => u.id !== selectedUser.id));
+      toast({ title: 'Konto usunięte', description: `Konto ${selectedUser.email} zostało usunięte.`, variant: 'destructive' });
+    } catch (e) { console.error(e); }
     setIsProcessing(false);
     closeModal();
   };
 
-  const availableForMerge = users.filter(u => 
-    u.id !== selectedUser?.id && 
-    u.role === selectedUser?.role
-  );
+  const handleActivate = async () => {
+    if (!selectedUser) return;
+    setIsProcessing(true);
+    try {
+      await apiClient.patch(`/user/${selectedUser.id}/activate`);
+      setUsers(prev => prev.filter(u => u.id !== selectedUser.id));
+      toast({ title: 'Konto aktywowane', description: `${selectedUser.email} zostało aktywowane.` });
+    } catch (e) { console.error(e); }
+    setIsProcessing(false);
+    closeModal();
+  };
+
+  useEffect(() => {
+    const loadPending = async () => {
+      try {
+        const res = await getPendingUsers();
+        if (res && res.status === 'success') {
+          const pending = (res.pending_users || []).map((u: any) => ({
+            id: String(u.id),
+            firstName: '',
+            lastName: '',
+            email: u.email,
+            role: u.role as UserRole,
+            status: 'active' as UserStatus,
+            createdAt: u.created_at || new Date().toISOString(),
+          } as User));
+          setUsers(pending);
+        }
+      } catch (e) { console.error(e); }
+    };
+    loadPending();
+  }, []);
 
   return (
     <AdminLayout>
@@ -270,39 +239,6 @@ export const AdminUsers = () => {
           )}
         </div>
 
-        {/* Block Modal */}
-        <Dialog open={modalType === 'block'} onOpenChange={closeModal}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Lock className="w-5 h-5 text-warning" />
-                Blokada konta
-              </DialogTitle>
-              <DialogDescription>
-                Blokujesz konto: <strong>{selectedUser?.firstName} {selectedUser?.lastName}</strong>
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-              <Label htmlFor="blockReason" className="form-label">Powód blokady</Label>
-              <Textarea
-                id="blockReason"
-                placeholder="Podaj powód blokady konta..."
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="mt-2"
-              />
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={closeModal} disabled={isProcessing}>
-                Anuluj
-              </Button>
-              <Button onClick={handleBlock} disabled={!reason.trim() || isProcessing}>
-                {isProcessing ? 'Blokowanie...' : 'Potwierdź blokadę'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
         {/* Delete Modal */}
         <Dialog open={modalType === 'delete'} onOpenChange={closeModal}>
           <DialogContent>
@@ -342,7 +278,7 @@ export const AdminUsers = () => {
         </Dialog>
 
         {/* Merge Modal */}
-        <Dialog open={modalType === 'merge'} onOpenChange={closeModal}>
+        {/* <Dialog open={modalType === 'merge'} onOpenChange={closeModal}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -386,10 +322,10 @@ export const AdminUsers = () => {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+        </Dialog> */}
 
         {/* Reset Password Modal */}
-        <Dialog open={modalType === 'reset'} onOpenChange={closeModal}>
+        {/* <Dialog open={modalType === 'reset'} onOpenChange={closeModal}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -414,7 +350,7 @@ export const AdminUsers = () => {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+        </Dialog> */}
       </div>
     </AdminLayout>
   );

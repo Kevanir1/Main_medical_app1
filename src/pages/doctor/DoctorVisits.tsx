@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { 
@@ -24,108 +24,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Visit, visitTypeLabels, visitStatusLabels } from '@/types/patient';
+import { useLocalStorageUser } from '@/hooks/use-user';
+import { getAppointmentsByDoctor } from '@/lib/medical-api/appointment';
+import { getPatient } from '@/lib/medical-api/patient';
 
-// Mock visit history
-const mockVisitHistory: Visit[] = [
-  {
-    id: '1',
-    patientId: 'p1',
-    patient: {
-      id: 'p1',
-      firstName: 'Anna',
-      lastName: 'Nowak',
-      pesel: '85042512345',
-      birthDate: '1985-04-25',
-      phone: '+48 600 123 456',
-    },
-    doctorId: 'd1',
-    date: '2024-01-15',
-    time: '09:00',
-    duration: 30,
-    type: 'consultation',
-    status: 'completed',
-    reason: 'Ból w klatce piersiowej',
-    notes: 'Pacjent zgłasza sporadyczne bóle w klatce piersiowej. Zlecono EKG.'
-  },
-  {
-    id: '2',
-    patientId: 'p2',
-    patient: {
-      id: 'p2',
-      firstName: 'Piotr',
-      lastName: 'Wiśniewski',
-      pesel: '78112234567',
-      birthDate: '1978-11-22',
-      phone: '+48 601 234 567',
-    },
-    doctorId: 'd1',
-    date: '2024-01-14',
-    time: '10:00',
-    duration: 45,
-    type: 'follow-up',
-    status: 'completed',
-    reason: 'Kontrola po zawale',
-    notes: 'Stan pacjenta stabilny. Kontynuacja leczenia farmakologicznego.'
-  },
-  {
-    id: '3',
-    patientId: 'p3',
-    patient: {
-      id: 'p3',
-      firstName: 'Maria',
-      lastName: 'Kowalczyk',
-      pesel: '92030567890',
-      birthDate: '1992-03-05',
-      phone: '+48 602 345 678',
-    },
-    doctorId: 'd1',
-    date: '2024-01-13',
-    time: '11:00',
-    duration: 60,
-    type: 'procedure',
-    status: 'completed',
-    reason: 'EKG wysiłkowe',
-    notes: 'Badanie wykonane prawidłowo. Wynik w normie.'
-  },
-  {
-    id: '4',
-    patientId: 'p4',
-    patient: {
-      id: 'p4',
-      firstName: 'Tomasz',
-      lastName: 'Zieliński',
-      pesel: '88071234567',
-      birthDate: '1988-07-12',
-      phone: '+48 603 456 789',
-    },
-    doctorId: 'd1',
-    date: '2024-01-12',
-    time: '14:00',
-    duration: 30,
-    type: 'consultation',
-    status: 'cancelled',
-    reason: 'Nadciśnienie'
-  },
-  {
-    id: '5',
-    patientId: 'p5',
-    patient: {
-      id: 'p5',
-      firstName: 'Katarzyna',
-      lastName: 'Dąbrowska',
-      pesel: '95051890123',
-      birthDate: '1995-05-18',
-      phone: '+48 604 567 890',
-    },
-    doctorId: 'd1',
-    date: '2024-01-11',
-    time: '08:30',
-    duration: 30,
-    type: 'consultation',
-    status: 'no-show',
-    reason: 'Arytmia'
-  },
-];
+// Load visits from backend (appointments by doctor)
 
 const getStatusColor = (status: Visit['status']) => {
   switch (status) {
@@ -148,8 +51,53 @@ export default function DoctorVisits() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
+  const [visits, setVisits] = useState<Visit[]>([]);
 
-  const filteredVisits = mockVisitHistory.filter(visit => {
+  const { doctor_id } = useLocalStorageUser();
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (!doctor_id) return;
+        const res = await getAppointmentsByDoctor(doctor_id);
+        if (res && res.status === 'success') {
+          const appts = res.appointments || [];
+          const enriched = await Promise.all(appts.map(async (a: any) => {
+            let patient = null;
+            try {
+              const p = await getPatient(a.patient_id);
+              patient = p.patient;
+            } catch (e) { patient = null; }
+            const dateObj = new Date(a.appointment_date);
+            return {
+              id: String(a.id),
+              patientId: String(a.patient_id),
+              patient: patient ? {
+                id: String(patient.id),
+                firstName: patient.first_name || '',
+                lastName: patient.last_name || '',
+                pesel: patient.pesel || '',
+                birthDate: patient.birth_date || '',
+                phone: patient.phone || '',
+              } : { id: String(a.patient_id), firstName: '', lastName: '', pesel: '', birthDate: '', phone: '' },
+              doctorId: String(a.doctor_id),
+              date: dateObj.toISOString().slice(0,10),
+              time: dateObj.toTimeString().slice(0,5),
+              duration: a.duration || 30,
+              type: 'consultation',
+              status: a.status || 'completed',
+              reason: a.notes || '',
+              notes: a.notes || ''
+            } as Visit;
+          }));
+          setVisits(enriched);
+        }
+      } catch (e) { console.error(e); }
+    };
+    load();
+  }, []);
+
+  const filteredVisits = visits.filter(visit => {
     const matchesSearch = 
       visit.patient.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       visit.patient.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, User, Phone, Mail, Calendar, FileText, ChevronRight } from 'lucide-react';
 import { DoctorLayout } from '@/components/layout/DoctorLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,71 +12,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Patient } from '@/types/patient';
-
-// Mock patients data
-const mockPatients: Patient[] = [
-  {
-    id: 'p1',
-    firstName: 'Anna',
-    lastName: 'Nowak',
-    pesel: '85042512345',
-    birthDate: '1985-04-25',
-    phone: '+48 600 123 456',
-    email: 'anna.nowak@email.com',
-  },
-  {
-    id: 'p2',
-    firstName: 'Piotr',
-    lastName: 'Wiśniewski',
-    pesel: '78112234567',
-    birthDate: '1978-11-22',
-    phone: '+48 601 234 567',
-    email: 'piotr.wisniewski@email.com',
-  },
-  {
-    id: 'p3',
-    firstName: 'Maria',
-    lastName: 'Kowalczyk',
-    pesel: '92030567890',
-    birthDate: '1992-03-05',
-    phone: '+48 602 345 678',
-  },
-  {
-    id: 'p4',
-    firstName: 'Tomasz',
-    lastName: 'Zieliński',
-    pesel: '88071234567',
-    birthDate: '1988-07-12',
-    phone: '+48 603 456 789',
-    email: 'tomasz.zielinski@email.com',
-  },
-  {
-    id: 'p5',
-    firstName: 'Katarzyna',
-    lastName: 'Dąbrowska',
-    pesel: '95051890123',
-    birthDate: '1995-05-18',
-    phone: '+48 604 567 890',
-    email: 'k.dabrowska@email.com',
-  },
-  {
-    id: 'p6',
-    firstName: 'Jan',
-    lastName: 'Kowalski',
-    pesel: '70032112345',
-    birthDate: '1970-03-21',
-    phone: '+48 605 678 901',
-  },
-  {
-    id: 'p7',
-    firstName: 'Ewa',
-    lastName: 'Mazur',
-    pesel: '82091567890',
-    birthDate: '1982-09-15',
-    phone: '+48 606 789 012',
-    email: 'ewa.mazur@email.com',
-  },
-];
+import apiClient from '@/lib/apiClient';
+import { useLocalStorageUser } from '@/hooks/use-user';
+import { getAppointmentsByDoctor } from '@/lib/medical-api/appointment';
+import { getPatient } from '@/lib/medical-api/patient';
 
 const calculateAge = (birthDate: string): number => {
   const today = new Date();
@@ -93,8 +32,44 @@ export default function DoctorPatients() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [patients, setPatients] = useState<Patient[]>([]);
 
-  const filteredPatients = mockPatients.filter(patient => {
+  const { doctor_id } = useLocalStorageUser();
+
+  useEffect(() => {
+    const loadPatients = async () => {
+      try {
+        if (!doctor_id) return;
+
+        const res = await getAppointmentsByDoctor(doctor_id);
+        if (res && res.status === 'success') {
+          const appointments = res.appointments || [];
+          const uniquePatientIds = Array.from(new Set(appointments.map((a: any) => a.patient_id)));
+          const patientsArr = await Promise.all(uniquePatientIds.map(async (pid: any) => {
+            try {
+              const p = await getPatient(pid);
+              const pat = p.patient;
+              return {
+                id: String(pat.id),
+                firstName: pat.first_name || '',
+                lastName: pat.last_name || '',
+                pesel: pat.pesel || '',
+                birthDate: pat.birth_date || '',
+                phone: pat.phone || '',
+                email: pat.email || undefined,
+              } as Patient;
+            } catch (e) {
+              return { id: String(pid), firstName: 'Anon', lastName: '', pesel: '', birthDate: '', phone: '' } as Patient;
+            }
+          }));
+          setPatients(patientsArr);
+        }
+      } catch (e) { console.error(e); }
+    };
+    loadPatients();
+  }, [doctor_id]);
+
+  const filteredPatients = patients.filter(patient => {
     const query = searchQuery.toLowerCase();
     return (
       patient.firstName.toLowerCase().includes(query) ||

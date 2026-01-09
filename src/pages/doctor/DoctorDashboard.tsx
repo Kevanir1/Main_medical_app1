@@ -444,13 +444,6 @@ export default function DoctorDashboard() {
                         {visit.status === 'scheduled' && (
                           <>
                             <Button 
-                              size="sm" 
-                              onClick={() => handleStartVisit(visit.id)}
-                            >
-                              <Play className="w-4 h-4 mr-1" />
-                              Rozpocznij
-                            </Button>
-                            <Button 
                               variant="outline" 
                               size="sm"
                               onClick={() => handleCancelVisit(visit.id)}

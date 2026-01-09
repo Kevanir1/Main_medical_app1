@@ -11,7 +11,6 @@ export interface DoctorRegistrationData {
   licenseNumber: string;
 }
 
-
 export const specializations = {
     'KARDIOLOGIA': 'cardiology',
     'DERMATOLOGIA': 'dermatology',
