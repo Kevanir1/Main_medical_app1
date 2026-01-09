@@ -16,6 +16,8 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminApplications from "./pages/admin/AdminApplications";
 import PatientLayout from "./components/layout/PatientLayout";
+import { DoctorLayout } from "./components/layout/DoctorLayout";
+import { AdminLayout } from "./components/layout/AdminLayout";
 import PatientRegistration from "./pages/patient/PatientRegistration";
 import PatientDashboard from "./pages/patient/PatientDashboard";
 import PatientVisits from "./pages/patient/PatientVisits";
@@ -52,15 +54,19 @@ const App = () => (
           <Route path="/doctor/register/summary" element={<DoctorRegistrationSummary />} />
           
           {/* Doctor panel routes */}
-          <Route path="/doctor" element={<DoctorDashboard />} />
-          <Route path="/doctor/patients" element={<DoctorPatients />} />
-          <Route path="/doctor/schedule" element={<DoctorSchedule />} />
-          <Route path="/doctor/visits" element={<DoctorVisits />} />
+          <Route path="/doctor" element={<DoctorLayout />}>
+            <Route index element={<DoctorDashboard />} />
+            <Route path="patients" element={<DoctorPatients />} />
+            <Route path="schedule" element={<DoctorSchedule />} />
+            <Route path="visits" element={<DoctorVisits />} />
+          </Route>
           
           {/* Admin routes */}
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/users" element={<AdminUsers />} />
-          <Route path="/admin/applications" element={<AdminApplications />} />
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="applications" element={<AdminApplications />} />
+          </Route>
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

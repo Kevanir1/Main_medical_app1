@@ -1,5 +1,5 @@
 import { ReactNode, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
@@ -22,9 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
-interface AdminLayoutProps {
-  children: ReactNode;
-}
+interface AdminLayoutProps {}
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
@@ -32,7 +30,7 @@ const navItems = [
   { icon: Users, label: 'Użytkownicy', href: '/admin/users' },
 ];
 
-export const AdminLayout = ({ children }: AdminLayoutProps) => {
+export const AdminLayout = ({}: AdminLayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -152,9 +150,11 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
 
         {/* Page content */}
         <main className="flex-1 p-6 overflow-auto">
-          {children}
+          <Outlet />
         </main>
       </div>
     </div>
   );
 };
+
+export default AdminLayout;

@@ -7,9 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { validatePesel, formatPesel } from '@/lib/pesel-validator';
-import { DoctorRegistrationData, SPECIALIZATIONS } from '@/types/doctor';
-import { AlertCircle, ArrowRight, Phone, Mail, User, Calendar, CreditCard, Stethoscope } from 'lucide-react';
+import { DoctorRegistrationData, specializations } from '@/types/doctor';
+import { Specialization } from '@/types/doctor';
+import { AlertCircle, ArrowRight, Phone, Mail, User, Calendar, CreditCard, Stethoscope, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { registerDoctor } from '@/lib/medical-api/user';
 
 export const DoctorRegistration = () => {
   const navigate = useNavigate();
@@ -28,6 +30,8 @@ export const DoctorRegistration = () => {
     passportNumber: '',
     birthDate: '',
     specialization: '',
+    password: '',
+    licenseNumber: '',
   });
 
   const validateForm = (): boolean => {
@@ -71,6 +75,14 @@ export const DoctorRegistration = () => {
     if (!formData.specialization) {
       newErrors.specialization = 'Specjalizacja jest wymagana';
     }
+    if (!formData.password.trim()) {
+      newErrors.password = 'Hasło jest wymagane';
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Hasło musi mieć co najmniej 6 znaków';
+    }
+    if (!formData.licenseNumber?.trim()) {
+      newErrors.licenseNumber = 'Numer licencji jest wymagany';
+    }
     if (!acceptTerms) {
       newErrors.terms = 'Musisz zaakceptować regulamin';
     }
@@ -79,7 +91,7 @@ export const DoctorRegistration = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!validateForm()) {
@@ -93,13 +105,37 @@ export const DoctorRegistration = () => {
 
     setIsLoading(true);
     
-    // Store form data and navigate to summary
-    sessionStorage.setItem('doctorRegistration', JSON.stringify(formData));
-    
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      // Prepare API payload
+      const payload = {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email,
+        password: formData.password,
+        specialization: specializations[formData.specialization as keyof typeof specializations],
+        license_number: formData.licenseNumber,
+      };
+
+      await registerDoctor(payload);
+      
+      // Store form data and navigate to summary
+      sessionStorage.setItem('doctorRegistration', JSON.stringify(formData));
+      
+      toast({
+        title: "Rejestracja wysłana!",
+        description: "Twój wniosek został przyjęty do weryfikacji.",
+      });
+      
       navigate('/doctor/register/summary');
-    }, 500);
+    } catch (error: any) {
+      toast({
+        title: "Błąd rejestracji",
+        description: error.message || "Wystąpił błąd podczas rejestracji",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleInputChange = (field: keyof DoctorRegistrationData, value: string) => {
@@ -266,7 +302,7 @@ export const DoctorRegistration = () => {
               <SelectValue placeholder="Wybierz specjalizację" />
             </SelectTrigger>
             <SelectContent>
-              {SPECIALIZATIONS.map((spec) => (
+              {Object.keys(specializations).map((spec) => (
                 <SelectItem key={spec} value={spec}>
                   {spec}
                 </SelectItem>
@@ -274,6 +310,39 @@ export const DoctorRegistration = () => {
             </SelectContent>
           </Select>
           {renderError('specialization')}
+        </div>
+
+        {/* Password */}
+        <div className="form-field">
+          <Label htmlFor="password" className="form-label">
+            <Lock className="w-4 h-4 inline mr-1" />
+            Hasło
+          </Label>
+          <Input
+            id="password"
+            type="password"
+            placeholder="Minimum 6 znaków"
+            value={formData.password}
+            onChange={(e) => handleInputChange('password', e.target.value)}
+            className={errors.password ? 'border-destructive' : ''}
+          />
+          {renderError('password')}
+        </div>
+
+        {/* License Number */}
+        <div className="form-field">
+          <Label htmlFor="licenseNumber" className="form-label">
+            <CreditCard className="w-4 h-4 inline mr-1" />
+            Numer licencji lekarskiej
+          </Label>
+          <Input
+            id="licenseNumber"
+            placeholder="Np. 123456"
+            value={formData.licenseNumber}
+            onChange={(e) => handleInputChange('licenseNumber', e.target.value)}
+            className={errors.licenseNumber ? 'border-destructive' : ''}
+          />
+          {renderError('licenseNumber')}
         </div>
 
         {/* Terms */}

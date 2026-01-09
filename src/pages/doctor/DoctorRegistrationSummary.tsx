@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AuthLayout } from '@/components/layout/AuthLayout';
 import { Button } from '@/components/ui/button';
 import { DoctorRegistrationData } from '@/types/doctor';
-import { Check, ArrowLeft, Send, User, Mail, Phone, CreditCard, Calendar, Stethoscope } from 'lucide-react';
+import { Check, ArrowLeft, Send, User, Mail, Phone, CreditCard, Calendar, Stethoscope, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export const DoctorRegistrationSummary = () => {
@@ -29,8 +29,8 @@ export const DoctorRegistrationSummary = () => {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Registration already done in the form, just show success
+    await new Promise(resolve => setTimeout(resolve, 500));
     
     // Clear stored data
     sessionStorage.removeItem('doctorRegistration');
@@ -83,6 +83,8 @@ export const DoctorRegistrationSummary = () => {
     { icon: CreditCard, label: formData.passportNumber ? 'Numer paszportu' : 'PESEL', value: formData.passportNumber || formData.pesel },
     { icon: Calendar, label: 'Data urodzenia', value: new Date(formData.birthDate).toLocaleDateString('pl-PL') },
     { icon: Stethoscope, label: 'Specjalizacja', value: formData.specialization },
+    { icon: Lock, label: 'Hasło', value: '•'.repeat(formData.password.length) },
+    { icon: CreditCard, label: 'Numer licencji', value: formData.licenseNumber },
   ];
 
   return (
