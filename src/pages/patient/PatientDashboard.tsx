@@ -1,29 +1,60 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, User, CalendarPlus, Loader2 } from "lucide-react";
+import { Calendar, Clock, User, CalendarPlus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
-import { visitTypeLabels, visitStatusLabels } from "@/types/patient";
-import { usePatient } from "@/contexts/PatientContext";
+import { visitTypeLabels, visitStatusLabels, Visit } from "@/types/patient";
+import { useEffect, useState } from 'react';
+import { useLocalStorageUser } from "@/hooks/use-user";
+import { getUpcomingAppointmentsByPatient } from "@/lib/medical-api/appointment";
+import { getDoctor } from "@/lib/medical-api/doctor/doctor";
+
+const doctorInfo: Record<string, { name: string; specialization: string }> = {};
 
 const PatientDashboard = () => {
-  const { upcomingAppointments, isLoading, profile } = usePatient();
+  const [upcomingVisits, setUpcomingVisits] = useState<Visit[]>([]);
+  const { patient_id } = useLocalStorageUser();
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin" />
-        <span className="ml-2">Ładowanie danych...</span>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (!patient_id) return;
+        const res = await getUpcomingAppointmentsByPatient(patient_id);
+        if (res && res.status === 'success') {
+          const appts = res.appointments || [];
+          const enriched = await Promise.all(appts.map(async (a: any) => {
+            let doctor = null;
+            try {
+              const d = await getDoctor(a.doctor_id);
+              doctor = d.doctor;
+            } catch (e) { doctor = null; }
+            const dateObj = new Date(a.appointment_date);
+            return {
+              id: String(a.id),
+              patientId: String(a.patient_id),
+              patient: { id: String(a.patient_id), firstName: '', lastName: '' },
+              doctorId: String(a.doctor_id),
+              date: dateObj.toISOString().slice(0,10),
+              time: dateObj.toTimeString().slice(0,5),
+              duration: a.duration || 30,
+              type: 'consultation',
+              status: a.status || 'scheduled',
+              reason: a.notes || ''
+            } as Visit;
+          }));
+          setUpcomingVisits(enriched);
+        }
+      } catch (e) { console.error(e); }
+    };
+    load();
+  }, []);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Witaj, {profile.firstName || 'Pacjencie'}!</h1>
+        <h1 className="text-2xl font-bold">Witaj, Jan!</h1>
         <p className="text-muted-foreground">Panel pacjenta</p>
       </div>
 
@@ -34,7 +65,7 @@ const PatientDashboard = () => {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{upcomingAppointments.length}</div>
+            <div className="text-2xl font-bold">{upcomingVisits.length}</div>
             <p className="text-xs text-muted-foreground">zaplanowanych</p>
           </CardContent>
         </Card>
@@ -45,10 +76,10 @@ const PatientDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {upcomingAppointments[0] ? format(new Date(upcomingAppointments[0].appointment_date), 'd MMM', { locale: pl }) : '-'}
+              {upcomingVisits[0] ? format(new Date(upcomingVisits[0].date), 'd MMM', { locale: pl }) : '-'}
             </div>
             <p className="text-xs text-muted-foreground">
-              {upcomingAppointments[0] ? `godz. ${format(new Date(upcomingAppointments[0].appointment_date), 'HH:mm')}` : 'brak wizyt'}
+              {upcomingVisits[0] ? `godz. ${upcomingVisits[0].time}` : 'brak wizyt'}
             </p>
           </CardContent>
         </Card>
@@ -73,15 +104,15 @@ const PatientDashboard = () => {
           <CardDescription>Twoje zaplanowane wizyty</CardDescription>
         </CardHeader>
         <CardContent>
-          {upcomingAppointments.length === 0 ? (
+          {upcomingVisits.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">
               Nie masz zaplanowanych wizyt
             </p>
           ) : (
             <div className="space-y-4">
-              {upcomingAppointments.slice(0, 3).map((appointment) => (
+              {upcomingVisits.map((visit) => (
                 <div 
-                  key={appointment.id} 
+                  key={visit.id} 
                   className="flex items-center justify-between p-4 rounded-lg border bg-card"
                 >
                   <div className="flex items-center gap-4">
@@ -89,27 +120,22 @@ const PatientDashboard = () => {
                       <User className="w-6 h-6 text-primary" />
                     </div>
                     <div>
-                      <p className="font-medium">
-                        dr {appointment.doctor?.first_name} {appointment.doctor?.last_name}
-                      </p>
+                      <p className="font-medium">{doctorInfo[visit.doctorId]?.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {appointment.doctor?.specialization}
+                        {doctorInfo[visit.doctorId]?.specialization}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="outline">Konsultacja</Badge>
-                        <Badge variant="secondary">{appointment.status}</Badge>
+                        <Badge variant="outline">{visitTypeLabels[visit.type]}</Badge>
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
                     <p className="font-medium">
-                      {format(new Date(appointment.appointment_date), 'd MMMM yyyy', { locale: pl })}
+                      {format(new Date(visit.date), 'd MMMM yyyy', { locale: pl })}
                     </p>
-                    <p className="text-sm text-muted-foreground">
-                      godz. {format(new Date(appointment.appointment_date), 'HH:mm')}
-                    </p>
+                    <p className="text-sm text-muted-foreground">godz. {visit.time}</p>
                     <Badge className="mt-1" variant="secondary">
-                      {appointment.status}
+                      {visitStatusLabels[visit.status]}
                     </Badge>
                   </div>
                 </div>

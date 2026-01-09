@@ -19,7 +19,7 @@ export const getAllSpecializations = async () => {
 }
 
 export const getDoctorsBySpecialization = async (specialization: string) => {
-  return await get(`${BASE_PATH}/specialization/${specialization}`);
+  return await get(`${BASE_PATH}/specializations/${specialization}`);
 }   
 
 export const updateDoctor = async (doctorId: number, payload: UpdateDoctorPayload) => {
