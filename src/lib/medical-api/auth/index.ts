@@ -13,12 +13,13 @@ export const login = async (email: string, password: string) => {
 }
 
 export const logout = async () => {
+  const res = await post('/auth/logout');
+  if (!res?.success) return res;
+
   localStorage.removeItem('token');
   localStorage.removeItem('patient_id');
   localStorage.removeItem('doctor_id');
   localStorage.removeItem('user_id');
   localStorage.removeItem('role');
-
-  const res = await post('/auth/logout');
   return res;
 }

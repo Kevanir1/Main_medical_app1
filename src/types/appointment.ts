@@ -13,6 +13,8 @@ export interface Specialty {
   label: string;
 }
 
+export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled';
+
 export interface TimeSlot {
   id: number | string;
   doctorId: number | string;
