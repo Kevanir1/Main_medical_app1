@@ -3,9 +3,9 @@ import { get, post, patch, del } from "../../apiClient"
 const BASE_PATH = '/appointment';
 
 type CreateAppointmentPayload = {
-  patientId: number;
-  doctorId: number;
-  availabilityId: number;
+  patient_id: number;
+  doctor_id: number;
+  availability_id: number;
 }
 
 export const createAppointment = async (payload: CreateAppointmentPayload) => {

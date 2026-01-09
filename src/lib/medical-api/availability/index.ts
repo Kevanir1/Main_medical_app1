@@ -3,7 +3,6 @@ import { get, post, patch, del } from "../../apiClient"
 const BASE_PATH = '/availability';
 
 type CreateAvailabilityPayload = {
-  
   doctor_Id: number;
   startTime: string; // ISO time string
   endTime: string; // ISO time string
