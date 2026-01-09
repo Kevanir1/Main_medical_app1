@@ -13,6 +13,7 @@ import { validatePesel, extractBirthDateFromPesel } from "@/lib/pesel-validator"
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { AuthLayout } from "@/components/layout/AuthLayout";
+import { registerUser } from "@/lib/medical-api/user";
 
 const patientSchema = z.object({
   firstName: z.string().min(2, "Imię musi mieć minimum 2 znaki").max(50),
@@ -64,7 +65,22 @@ const PatientRegistration = () => {
     setStep('summary');
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    if (!formData) return;
+
+    const response = await registerUser({
+      first_name: formData.firstName,
+      last_name: formData.lastName,
+      email: formData.email,
+      password: formData.password,
+      pesel: formData.pesel,
+      phone: formData.phone
+    });
+
+    if (!response) {
+      toast.error("Wystąpił błąd podczas rejestracji. Spróbuj ponownie.");
+    }
+
     toast.success("Konto zostało utworzone! Możesz się teraz zalogować.");
     navigate('/login');
   };
@@ -107,7 +123,7 @@ const PatientRegistration = () => {
               <Button variant="outline" className="flex-1" onClick={() => setStep('form')}>
                 Wróć do edycji
               </Button>
-              <Button className="flex-1" onClick={handleConfirm}>
+              <Button className="flex-1" onClick={() => void handleConfirm()}>
                 Potwierdź rejestrację
               </Button>
             </div>

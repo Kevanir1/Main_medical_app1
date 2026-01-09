@@ -47,25 +47,25 @@ async function request(path: string, options: RequestInit = {}) {
 }
 
 export async function get(path: string) {
-  return request(getUrl(path), { method: 'GET' });
+  return request(path, { method: 'GET' });
 }
 
 export async function post(path: string, body?: any) {
-  return request(getUrl(path), {
+  return request(path, {
     method: 'POST',
     body: body ? JSON.stringify(body) : undefined,
   });
 }
 
 export async function patch(path: string, body?: any) {
-  return request(getUrl(path), {
+  return request(path, {
     method: 'PATCH',
     body: body ? JSON.stringify(body) : undefined,
   });
 }
 
 export async function del(path: string) {
-  return request(getUrl(path), { method: 'DELETE' });
+  return request(path, { method: 'DELETE' });
 }
 
 export default {
