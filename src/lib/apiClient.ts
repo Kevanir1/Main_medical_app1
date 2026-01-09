@@ -1,13 +1,9 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const API_BASE_URL = 'http://localhost:5000';
 
-if (!API_BASE_URL) {
-  throw new Error('VITE_API_BASE_URL is not defined');
-}
+const getUrl = (path: string) => `${API_BASE_URL}${path}`
 
 async function request(path: string, options: RequestInit = {}) {
-  const url = path.startsWith('http')
-    ? path
-    : `${API_BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
+  const url = getUrl(path);
 
   const token = typeof window !== 'undefined'
     ? localStorage.getItem('token')
@@ -32,7 +28,7 @@ async function request(path: string, options: RequestInit = {}) {
   try {
     payload = await res.json();
   } catch {
-    // response is not JSON
+    console.error('Failed to parse JSON response');
   }
 
   if (!res.ok) {
@@ -51,25 +47,25 @@ async function request(path: string, options: RequestInit = {}) {
 }
 
 export async function get(path: string) {
-  return request(path, { method: 'GET' });
+  return request(getUrl(path), { method: 'GET' });
 }
 
 export async function post(path: string, body?: any) {
-  return request(path, {
+  return request(getUrl(path), {
     method: 'POST',
     body: body ? JSON.stringify(body) : undefined,
   });
 }
 
 export async function patch(path: string, body?: any) {
-  return request(path, {
+  return request(getUrl(path), {
     method: 'PATCH',
     body: body ? JSON.stringify(body) : undefined,
   });
 }
 
 export async function del(path: string) {
-  return request(path, { method: 'DELETE' });
+  return request(getUrl(path), { method: 'DELETE' });
 }
 
 export default {

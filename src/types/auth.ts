@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'doctor' | 'patient' | 'receptionist';
+export type UserRole = 'admin' | 'doctor' | 'user';
 
 export interface AuthUser {
   id: string;
@@ -22,13 +22,11 @@ export interface AuthError {
 export const roleLabels: Record<UserRole, string> = {
   'admin': 'Administrator',
   'doctor': 'Lekarz',
-  'patient': 'Pacjent',
-  'receptionist': 'Recepcjonista'
+  'user': 'Pacjent',
 };
 
 export const roleRedirectPaths: Record<UserRole, string> = {
   'admin': '/admin',
   'doctor': '/doctor',
-  'patient': '/patient',
-  'receptionist': '/reception'
+  'user': '/patient',
 };
