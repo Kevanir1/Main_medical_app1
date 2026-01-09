@@ -1,4 +1,4 @@
-import { get, post, patch, del } from "../apiClient"
+import { get, post, patch, del } from "../../apiClient"
 
 export const login = async (email: string, password: string) => {
   const res = await post('/auth/login', { email, password });

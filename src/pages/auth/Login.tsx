@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AuthError, UserRole, roleRedirectPaths } from '@/types/auth';
 import { z } from 'zod';
+import { login } from '@/lib/medical-api/auth';
 
 // Validation schema
 const loginSchema = z.object({
@@ -44,11 +45,9 @@ export default function Login() {
 
     setIsLoading(true);
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // TODO: Integrate with backend API for authentication
-    // For now, show error that backend connection is required
+    const response = await login(email, password);
+    console.log('Login response:', response);
+  
     setError({
       code: 'invalid_credentials',
       message: 'Nieprawidłowy email lub hasło'
