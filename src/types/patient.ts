@@ -3,9 +3,7 @@ export interface Patient {
   firstName: string;
   lastName: string;
   pesel: string;
-  birthDate: string;
   phone: string;
-  email?: string;
 }
 
 export interface Visit {

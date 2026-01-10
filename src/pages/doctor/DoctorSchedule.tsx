@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { format, startOfWeek, addDays, isSameDay } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { getAppointmentsByDoctor} from '@/lib/medical-api/appointment';
 import { useLocalStorageUser } from '@/hooks/use-user';
+import { Appointment } from '@/types/appointment';
 
 // Mock schedule data
 const mockScheduleItems = [
@@ -45,6 +46,7 @@ export default function DoctorSchedule() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
 
   const handlePrevWeek = () => {
     setCurrentDate(addDays(currentDate, -7));
@@ -55,8 +57,38 @@ export default function DoctorSchedule() {
   };
 
   const getItemsForDay = (date: Date) => {
-    return mockScheduleItems.filter(item => isSameDay(item.date, date));
+    return appointments
+      .filter(app => isSameDay(new Date(app.appointmentDate), date))
+      .map(app => {
+        return {
+          id: app.id,
+          time: format(new Date(app.appointmentDate), 'HH:mm'),
+          type: 'consultation',
+        };
+      });
   };
+
+  useEffect(() => {
+    const loadAppointments = async () => {
+      try {
+        if (!doctor_id) return;
+        const res = await getAppointmentsByDoctor(doctor_id);
+        if (res && res.status === 'success') {
+          setAppointments(res.appointments.map((a: any) => ({
+            id: a.id,
+            patientId: a.patient_id,
+            doctorId: a.doctor_id,
+            availabilityId: a.availability_id,
+            appointmentDate: a.appointment_date,
+            status: a.status,
+          })));
+        }
+      } catch (e) {
+        console.error("Error loading appointments:", e);
+      }
+    };
+    loadAppointments();
+  }, [doctor_id]);
 
   return (
     <div className="space-y-6">
@@ -164,8 +196,8 @@ export default function DoctorSchedule() {
                               getTypeColor(item.type)
                             )}
                           >
-                            <p className="font-medium truncate">{item.patient}</p>
-                            <p className="opacity-80">{item.duration} min</p>
+                            {/* <p className="font-medium truncate">{item.patient}</p> */}
+                            {/* <p className="opacity-80">{item.duration} min</p> */}
                           </div>
                         ))}
                       </div>
@@ -191,9 +223,9 @@ export default function DoctorSchedule() {
                 <p className="text-sm text-muted-foreground">Wizyt dzisiaj</p>
               </div>
               <div className="p-4 rounded-lg bg-muted/50">
-                <p className="text-2xl font-bold text-primary">
+                {/* <p className="text-2xl font-bold text-primary">
                   {getItemsForDay(new Date()).reduce((acc, item) => acc + item.duration, 0)} min
-                </p>
+                </p> */}
                 <p className="text-sm text-muted-foreground">Łączny czas</p>
               </div>
               <div className="p-4 rounded-lg bg-muted/50">

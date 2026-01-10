@@ -10,17 +10,30 @@ import { useEffect, useState } from 'react';
 import { useLocalStorageUser } from "@/hooks/use-user";
 import { getUpcomingAppointmentsByPatient } from "@/lib/medical-api/appointment";
 import { getDoctor } from "@/lib/medical-api/doctor/doctor";
+import { getPatient } from "@/lib/medical-api/patient";
+import { Patient } from "@/types/patient";
 
 const doctorInfo: Record<string, { name: string; specialization: string }> = {};
 
 const PatientDashboard = () => {
   const [upcomingVisits, setUpcomingVisits] = useState<Visit[]>([]);
+  const [patientData, setPatientData] = useState<Patient | null>(null);
   const { patient_id } = useLocalStorageUser();
 
   useEffect(() => {
     const load = async () => {
       try {
         if (!patient_id) return;
+
+        const p = await getPatient(patient_id);
+        setPatientData({
+          id: String(p.patient.id),
+          firstName: p.patient.first_name || '',
+          lastName: p.patient.last_name || '',
+          pesel: p.patient.pesel || '',
+          phone: p.patient.phone || '',
+        });
+
         const res = await getUpcomingAppointmentsByPatient(patient_id);
         if (res && res.status === 'success') {
           const appts = res.appointments || [];
@@ -54,7 +67,7 @@ const PatientDashboard = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Witaj, Jan!</h1>
+        <h1 className="text-2xl font-bold">Witaj, {patientData ? `${patientData.firstName}` : 'Ładowanie...'}!</h1>
         <p className="text-muted-foreground">Panel pacjenta</p>
       </div>
 
