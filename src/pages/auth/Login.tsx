@@ -47,7 +47,6 @@ export default function Login() {
 
     try {
       const response = await login(email, password);
-      console.log('Login response:', response);
 
       if (response && response.token) {
         // Login successful, redirect based on role

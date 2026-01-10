@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
+import { logout } from '@/lib/medical-api/auth';
 
 interface DoctorLayoutProps {}
 
@@ -38,8 +39,8 @@ export const DoctorLayout = ({}: DoctorLayoutProps) => {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const handleLogout = () => {
-    // TODO: Implement actual logout logic
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 

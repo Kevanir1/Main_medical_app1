@@ -14,7 +14,6 @@ export const login = async (email: string, password: string) => {
 
 export const logout = async () => {
   const res = await post('/auth/logout');
-  if (!res?.success) return res;
 
   localStorage.removeItem('token');
   localStorage.removeItem('patient_id');

@@ -7,7 +7,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/auth/Login";
 import DoctorRegistration from "./pages/doctor/DoctorRegistration";
-import DoctorRegistrationSummary from "./pages/doctor/DoctorRegistrationSummary";
+import DoctorRegistrationSummaryDialog from "./pages/doctor/DoctorRegistrationSummary";
 import DoctorDashboard from "./pages/doctor/DoctorDashboard";
 import DoctorPatients from "./pages/doctor/DoctorPatients";
 import DoctorSchedule from "./pages/doctor/DoctorSchedule";
@@ -51,7 +51,7 @@ const App = () => (
           
           {/* Doctor registration routes */}
           <Route path="/doctor/register" element={<DoctorRegistration />} />
-          <Route path="/doctor/register/summary" element={<DoctorRegistrationSummary />} />
+          {/* <Route path="/doctor/register/summary" element={<DoctorRegistrationSummary />} /> */}
           
           {/* Doctor panel routes */}
           <Route path="/doctor" element={<DoctorLayout />}>

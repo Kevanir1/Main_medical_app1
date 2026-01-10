@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { PatientProvider, usePatient } from '@/contexts/PatientContext';
+import { logout } from "@/lib/medical-api/auth";
 
 const PatientLayoutContent = () => {
   const location = useLocation();
@@ -31,7 +32,8 @@ const PatientLayoutContent = () => {
     { name: 'Mój profil', href: '/patient/profile', icon: User },
   ];
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
