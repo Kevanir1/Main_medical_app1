@@ -22,3 +22,7 @@ export const logout = async () => {
   localStorage.removeItem('role');
   return res;
 }
+
+export const getMe = async () => {
+  return await get('/auth/me');
+}

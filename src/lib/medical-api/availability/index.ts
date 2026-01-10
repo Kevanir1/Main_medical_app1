@@ -17,6 +17,11 @@ export const getDoctorAvailability = async (doctorId: number) => {
   return await get(`${BASE_PATH}/doctor/${doctorId}`);
 }
 
+export const getAvailabilitiesBySpecializationAndDate = async (specialization: string, date: string) => {
+  const params = `?specialization=${encodeURIComponent(specialization)}&date=${encodeURIComponent(date)}`;
+  return await get(`${BASE_PATH}/${params}`);
+}
+
 export const updateDoctorAvailability = async (availabilityId: number, payload: Partial<CreateAvailabilityPayload>) => {
   return await patch(`${BASE_PATH}/${availabilityId}`, payload);
 }

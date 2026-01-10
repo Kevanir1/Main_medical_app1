@@ -36,18 +36,18 @@ interface Availability {
   is_available: boolean;
 }
 
-type Step = 'calendar' | 'specialization' | 'details' | 'confirm';
+type Step = 'specialization' | 'calendar' | 'details' | 'confirm';
 
 const PatientBooking = () => {
   const navigate = useNavigate();
   const { profile, refreshAppointments } = usePatient();
   
-  const [step, setStep] = useState<Step>('calendar');
+  const [step, setStep] = useState<Step>('specialization');
+  const [selectedSpecialization, setSelectedSpecialization] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [selectedSpecialization, setSelectedSpecialization] = useState<string | null>(null);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
-  const [selectedAvailability, setSelectedAvailability] = useState<Availability | null>(null);
+  const [selectedAvailability, setSelectedAvailability] = useState<any | null>(null);
   const [visitType, setVisitType] = useState<VisitType>('consultation');
   const [reason, setReason] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -56,7 +56,9 @@ const PatientBooking = () => {
   // API data
   const [specializations, setSpecializations] = useState<string[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [availabilities, setAvailabilities] = useState<Availability[]>([]);
+  const [availabilitiesRaw, setAvailabilitiesRaw] = useState<any[]>([]);
+  const [slotsMap, setSlotsMap] = useState<Record<string, Array<any>>>({});
+  const [loadingAvailabilities, setLoadingAvailabilities] = useState<boolean>(false);
 
   // Load specializations on component mount
   useEffect(() => {
@@ -74,7 +76,7 @@ const PatientBooking = () => {
     loadSpecializations();
   }, []);
 
-  // Load doctors when specialization is selected
+  // Load doctors when specialization is selected (list of doctors for info)
   useEffect(() => {
     if (!selectedSpecialization) {
       setDoctors([]);
@@ -86,7 +88,6 @@ const PatientBooking = () => {
       try {
         const response = await getDoctorsBySpecialization(selectedSpecialization);
         if (response?.doctors) {
-          // Transform doctors to include name field
           const transformedDoctors = response.doctors.map((doctor: any) => ({
             ...doctor,
             name: `dr ${doctor.first_name} ${doctor.last_name}`
@@ -100,68 +101,156 @@ const PatientBooking = () => {
         setIsLoading(false);
       }
     };
-    loadDoctors();
+    void loadDoctors();
   }, [selectedSpecialization]);
 
-  // Load availability when doctor is selected
+  // Load availabilities for specialization + date when both selected
   useEffect(() => {
-    if (!selectedDoctor) {
-      setAvailabilities([]);
-      return;
-    }
+    const loadAvailabilities = async () => {
+      if (!selectedSpecialization || !selectedDate) {
+        setAvailabilitiesRaw([]);
+        setSlotsMap({});
+        return;
+      }
 
-    const loadAvailability = async () => {
+      setLoadingAvailabilities(true);
       try {
-        const response = await getDoctorAvailability(selectedDoctor.id);
-        if (response?.availability) {
-          setAvailabilities(response.availability);
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+
+        // Ensure we have doctors for the specialization
+        let localDoctors = doctors;
+        if (!localDoctors || localDoctors.length === 0) {
+          const resp = await getDoctorsBySpecialization(selectedSpecialization);
+          localDoctors = resp?.doctors || [];
+          const transformed = localDoctors.map((d: any) => ({ ...d, name: `dr ${d.first_name} ${d.last_name}` }));
+          setDoctors(transformed);
+          localDoctors = transformed;
         }
-      } catch (error) {
-        console.error('Error loading availability:', error);
-        toast.error('Nie udało się załadować dostępności lekarza');
+
+        // Fetch availability for each doctor in parallel
+        const results = await Promise.allSettled(localDoctors.map(async (doc: any) => {
+          const docId = doc.id ?? doc.doctor_id;
+          try {
+            const resp = await getDoctorAvailability(docId);
+            return { doctor: doc, availability: resp?.availability || [] };
+          } catch (err: any) {
+            // Treat 404 as empty availability (wrong/missing endpoint), don't surface toast
+            const status = err?.response?.status ?? err?.status;
+            if (status === 404) return { doctor: doc, availability: [] };
+            // otherwise propagate rejection to be handled below
+            throw err;
+          }
+        }));
+
+        let hadNon404Error = false;
+        const allItems: any[] = [];
+
+        for (const r of results) {
+          if (r.status === 'fulfilled') {
+            const { doctor, availability } = r.value;
+            // attach doctor info to each availability item
+            availability.forEach((a: any) => {
+              allItems.push({ ...a, doctor });
+            });
+          } else {
+            const reason = r.reason as any;
+            const status = reason?.response?.status ?? reason?.status;
+            if (status === 404) {
+              // skip
+            } else {
+              hadNon404Error = true;
+            }
+          }
+        }
+
+        if (hadNon404Error) {
+          toast.error('Wystąpił błąd podczas pobierania dostępności');
+        }
+
+        // Filter by selected date and build slots map
+        setAvailabilitiesRaw(allItems);
+        const map: Record<string, Array<any>> = {};
+        allItems.forEach((a: any) => {
+          if (!a.is_available) return;
+          const aDate = format(new Date(a.start_time), 'yyyy-MM-dd');
+          if (aDate !== dateStr) return;
+          const time = format(new Date(a.start_time), 'HH:mm');
+          map[time] = map[time] || [];
+          map[time].push({
+            availability_id: a.availability_id ?? a.id,
+            doctor_id: a.doctor?.id ?? a.doctor?.doctor_id ?? a.doctor_id,
+            first_name: a.doctor?.first_name ?? '',
+            last_name: a.doctor?.last_name ?? '',
+            specialization: a.doctor?.specialization ?? '',
+            license_number: a.doctor?.license_number ?? ''
+          });
+        });
+        setSlotsMap(map);
+      } catch (e) {
+        console.error('Error loading availabilities by fetching per-doctor', e);
+        toast.error('Wystąpił błąd podczas pobierania dostępności');
+        setAvailabilitiesRaw([]);
+        setSlotsMap({});
+      } finally {
+        setLoadingAvailabilities(false);
       }
     };
-    loadAvailability();
-  }, [selectedDoctor]);
 
-  // Get all available times for selected date (for showing in step 1)
-  const getAvailableTimesForDate = (date: Date) => {
-    if (!availabilities.length) return [];
-    
-    const dateStr = format(date, 'yyyy-MM-dd');
-    const availableTimes = new Set<string>();
-    
-    availabilities.forEach(availability => {
-      const availabilityDate = format(new Date(availability.start_time), 'yyyy-MM-dd');
-      if (availabilityDate === dateStr && availability.is_available) {
-        const time = format(new Date(availability.start_time), 'HH:mm');
-        availableTimes.add(time);
-      }
-    });
-    
-    return Array.from(availableTimes).sort();
+    void loadAvailabilities();
+  }, [selectedSpecialization, selectedDate]);
+
+  // Get available times from slotsMap for selected date
+  const availableTimes = selectedDate ? Object.keys(slotsMap).sort() : [];
+
+  const handleSpecializationSelect = (spec: string) => {
+    setSelectedSpecialization(spec);
+    // move to date selection step
+    setStep('calendar');
+    setSelectedDate(undefined);
+    setSelectedTime(null);
+    setSelectedDoctor(null);
   };
-
-  const availableTimes = selectedDate ? getAvailableTimesForDate(selectedDate) : [];
 
   const handleDateSelect = (date: Date | undefined) => {
     setSelectedDate(date);
     setSelectedTime(null);
-    setSelectedSpecialization(null);
     setSelectedDoctor(null);
   };
 
   const handleTimeSelect = (time: string) => {
     setSelectedTime(time);
-    setStep('specialization');
+    // if only one doctor for that time, auto-select and proceed
+    const doctorsForTime = slotsMap[time] || [];
+    if (doctorsForTime.length === 1) {
+      const d = doctorsForTime[0];
+      setSelectedDoctor({
+        id: d.doctor_id,
+        user_id: d.doctor_id,
+        first_name: d.first_name,
+        last_name: d.last_name,
+        specialization: d.specialization,
+        license_number: d.license_number,
+        name: `dr ${d.first_name} ${d.last_name}`
+      });
+      setSelectedAvailability({ availability_id: d.availability_id });
+      setStep('details');
+    } else {
+      // multiple doctors: stay on calendar step but show doctor selector below
+      setSelectedDoctor(null);
+    }
   };
 
-  const handleSpecializationSelect = (spec: string) => {
-    setSelectedSpecialization(spec);
-  };
-
-  const handleDoctorSelect = (doctor: Doctor) => {
-    setSelectedDoctor(doctor);
+  const handleDoctorSelect = (doctor: any) => {
+    setSelectedDoctor({
+      id: doctor.doctor_id,
+      user_id: doctor.doctor_id,
+      first_name: doctor.first_name,
+      last_name: doctor.last_name,
+      specialization: doctor.specialization,
+      license_number: doctor.license_number,
+      name: `dr ${doctor.first_name} ${doctor.last_name}`
+    });
+    setSelectedAvailability({ availability_id: doctor.availability_id });
     setStep('details');
   };
 
@@ -174,7 +263,7 @@ const PatientBooking = () => {
   };
 
   const handleConfirm = async () => {
-    if (!selectedDoctor || !selectedDate || !selectedTime || !profile) {
+    if (!selectedDoctor || !selectedDate || !selectedTime || !profile || !selectedAvailability) {
       toast.error("Brak wymaganych danych do utworzenia wizyty");
       return;
     }
@@ -183,23 +272,11 @@ const PatientBooking = () => {
     
     try {
       // Find the availability slot for the selected time
-      const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      const selectedAvailability = availabilities.find(availability => {
-        const availabilityDate = format(new Date(availability.start_time), 'yyyy-MM-dd');
-        const availabilityTime = format(new Date(availability.start_time), 'HH:mm');
-        return availabilityDate === dateStr && availabilityTime === selectedTime;
-      });
-
-      if (!selectedAvailability) {
-        toast.error("Wybrany termin nie jest dostępny");
-        return;
-      }
-
-      // Create appointment
+      // Create appointment using selectedAvailability.availability_id
       const appointmentData = {
         patient_id: Number(localStorage.getItem('patient_id')),
         doctor_id: selectedDoctor.id,
-        availability_id: selectedAvailability.id
+        availability_id: selectedAvailability.availability_id || selectedAvailability.id
       };
 
       const response = await createAppointment(appointmentData);
@@ -220,21 +297,30 @@ const PatientBooking = () => {
   };
 
   const goBack = () => {
-    if (step === 'specialization') {
-      setSelectedTime(null);
-      setSelectedSpecialization(null);
-      setSelectedDoctor(null);
-      setStep('calendar');
-    } else if (step === 'details') {
-      setSelectedDoctor(null);
+    if (step === 'calendar') {
       setStep('specialization');
-    } else if (step === 'confirm') {
+      return;
+    }
+
+    if (step === 'details') {
+      setStep('calendar');
+      return;
+    }
+
+    if (step === 'confirm') {
       setStep('details');
+      return;
+    }
+
+    // If already at the first step, clear selection
+    if (step === 'specialization') {
+      setSelectedSpecialization(null);
     }
   };
 
-  const stepIndex = ['calendar', 'specialization', 'details', 'confirm'].indexOf(step);
-  const stepLabels = ['Data i godzina', 'Specjalizacja', 'Szczegóły', 'Potwierdzenie'];
+  const orderedSteps = ['specialization', 'calendar', 'details', 'confirm'];
+  const stepIndex = orderedSteps.indexOf(step);
+  const stepLabels = ['Specjalizacja', 'Data i godzina', 'Szczegóły', 'Potwierdzenie'];
 
   return (
     <div className="space-y-6">
@@ -285,121 +371,142 @@ const PatientBooking = () => {
                   className={cn("rounded-md border pointer-events-auto")}
                 />
               </div>
-              {selectedDate && (
-                <div>
-                  <Label className="mb-2 block">
-                    Dostępne godziny - {format(selectedDate, 'd MMMM yyyy', { locale: pl })}
-                  </Label>
-                  {availableTimes.length > 0 ? (
-                    <div className="grid grid-cols-3 gap-2">
-                      {availableTimes.map((time) => (
-                        <Button
-                          key={time}
-                          variant={selectedTime === time ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => handleTimeSelect(time)}
-                        >
-                          <Clock className="w-4 h-4 mr-1" />
-                          {time}
-                        </Button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 p-4 rounded-lg bg-muted text-muted-foreground">
-                      <AlertCircle className="w-5 h-5" />
-                      <span>Brak dostępnych terminów w tym dniu</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              <div>
+                <Label className="mb-2 block">
+                  {selectedDate ? `Dostępne godziny - ${format(selectedDate, 'd MMMM yyyy', { locale: pl })}` : 'Dostępne godziny'}
+                </Label>
 
-      {step === 'specialization' && selectedDate && selectedTime && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Wybierz specjalizację i lekarza</CardTitle>
-            <CardDescription>
-              Termin: {format(selectedDate, 'd MMMM yyyy', { locale: pl })} o godzinie {selectedTime}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label>Specjalizacja</Label>
-              <div className="flex flex-wrap gap-2">
-                {specializations.map((spec) => {
-                  // Check if any doctors are available for this specialization
-                  const doctorsAvailable = doctors.length > 0;
-                  
-                  return (
-                    <Button
-                      key={spec}
-                      variant={selectedSpecialization === spec ? "default" : "outline"}
-                      size="sm"
-                      disabled={!doctorsAvailable && selectedSpecialization !== spec}
-                      onClick={() => handleSpecializationSelect(spec)}
-                    >
-                      {spec}
-                      {doctorsAvailable && selectedSpecialization === spec && (
-                        <Badge variant="secondary" className="ml-2">
-                          {doctors.length}
-                        </Badge>
-                      )}
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {selectedSpecialization && (
-              <div className="space-y-2">
-                <Label>Dostępni lekarze</Label>
-                {isLoading ? (
+                {!selectedSpecialization ? (
+                  <div className="flex items-center gap-2 p-4 rounded-lg bg-muted text-muted-foreground">
+                    <AlertCircle className="w-5 h-5" />
+                    <span>Wybierz specjalizację w kroku 1, aby zobaczyć dostępne terminy</span>
+                  </div>
+                ) : !selectedDate ? (
+                  <div className="flex items-center gap-2 p-4 rounded-lg bg-muted text-muted-foreground">
+                    <AlertCircle className="w-5 h-5" />
+                    <span>Wybierz datę, aby zobaczyć dostępne godziny</span>
+                  </div>
+                ) : loadingAvailabilities ? (
                   <div className="flex items-center justify-center p-8">
                     <Loader2 className="w-6 h-6 animate-spin" />
-                    <span className="ml-2">Ładowanie lekarzy...</span>
+                    <span className="ml-2">Ładowanie dostępnych terminów...</span>
                   </div>
-                ) : doctors.length > 0 ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {doctors.map((doctor) => (
-                      <div
-                        key={doctor.id}
-                        className={cn(
-                          "p-4 rounded-lg border cursor-pointer transition-colors",
-                          selectedDoctor?.id === doctor.id 
-                            ? "border-primary bg-primary/5" 
-                            : "hover:border-primary"
-                        )}
-                        onClick={() => handleDoctorSelect(doctor)}
+                ) : availableTimes.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {availableTimes.map((time) => (
+                      <Button
+                        key={time}
+                        variant={selectedTime === time ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handleTimeSelect(time)}
                       >
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                            <User className="w-6 h-6 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{doctor.name}</p>
-                            <Badge variant="secondary">{doctor.specialization}</Badge>
-                          </div>
-                        </div>
-                      </div>
+                        <Clock className="w-4 h-4 mr-1" />
+                        {time}
+                      </Button>
                     ))}
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 p-4 rounded-lg bg-muted text-muted-foreground">
                     <AlertCircle className="w-5 h-5" />
-                    <span>Brak dostępnych lekarzy dla wybranej specjalizacji</span>
+                    <span>Brak dostępnych terminów w tym dniu</span>
                   </div>
                 )}
-              </div>
-            )}
 
-            <div className="pt-4">
+                {/* Doctor selector for chosen time */}
+                <div className="mt-4">
+                  <Label className="mb-2 block">Lekarze dla wybranego terminu</Label>
+                  {selectedTime ? (
+                    (() => {
+                      const doctorsForTime = slotsMap[selectedTime] || [];
+                      if (doctorsForTime.length === 0) {
+                        return (
+                          <div className="flex items-center gap-2 p-4 rounded-lg bg-muted text-muted-foreground">
+                            <AlertCircle className="w-5 h-5" />
+                            <span>Brak dostępnych lekarzy dla wybranego terminu</span>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="grid gap-4 md:grid-cols-2">
+                          {doctorsForTime.map((doctor) => (
+                            <div
+                              key={`${doctor.doctor_id}-${doctor.availability_id}`}
+                              className={cn(
+                                "p-4 rounded-lg border cursor-pointer transition-colors",
+                                selectedDoctor?.id === doctor.doctor_id 
+                                  ? "border-primary bg-primary/5" 
+                                  : "hover:border-primary"
+                              )}
+                              onClick={() => handleDoctorSelect(doctor)}
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                                  <User className="w-6 h-6 text-primary" />
+                                </div>
+                                <div>
+                                  <p className="font-medium">dr {doctor.first_name} {doctor.last_name}</p>
+                                  <Badge variant="secondary">{doctor.specialization}</Badge>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <div className="flex items-center gap-2 p-4 rounded-lg bg-muted text-muted-foreground">
+                      <AlertCircle className="w-5 h-5" />
+                      <span>Wybierz godzinę, aby zobaczyć dostępnych lekarzy</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              </div>
+
+            <div className="flex gap-3 pt-4">
               <Button variant="outline" onClick={goBack}>
-                Wróć
+                Wstecz
+              </Button>
+              <Button onClick={() => setStep('details')} disabled={!selectedDate || !selectedTime || !selectedDoctor}>
+                Dalej
               </Button>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === 'specialization' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Wybierz specjalizację</CardTitle>
+            <CardDescription>Wybierz specjalizację, aby przejść do wyboru daty</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label>Specjalizacja</Label>
+              <div className="flex flex-wrap gap-2">
+                {specializations.length === 0 ? (
+                  <div className="flex items-center gap-2 p-4 rounded-lg bg-muted text-muted-foreground">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Ładowanie specjalizacji...</span>
+                  </div>
+                ) : (
+                  specializations.map((spec) => (
+                    <Button
+                      key={spec}
+                      variant={selectedSpecialization === spec ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleSpecializationSelect(spec)}
+                    >
+                      {spec}
+                    </Button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* No back button in specialization (Step 1) per requirements */}
           </CardContent>
         </Card>
       )}
@@ -438,17 +545,17 @@ const PatientBooking = () => {
 
             <div className="flex gap-3">
               <Button variant="outline" onClick={goBack}>
-                Wróć
+                Wstecz
               </Button>
               <Button onClick={handleDetailsSubmit}>
-                Przejdź do podsumowania
+                Dalej
               </Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {step === 'confirm' && selectedDoctor && selectedDate && selectedTime && (
+      {step === 'confirm' && (
         <Card>
           <CardHeader>
             <CardTitle>Potwierdzenie wizyty</CardTitle>
@@ -458,19 +565,19 @@ const PatientBooking = () => {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-muted-foreground">Data</p>
-                <p className="font-medium">{format(selectedDate, 'd MMMM yyyy', { locale: pl })}</p>
+                <p className="font-medium">{selectedDate ? format(selectedDate, 'd MMMM yyyy', { locale: pl }) : '—'}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Godzina</p>
-                <p className="font-medium">{selectedTime}</p>
+                <p className="font-medium">{selectedTime || '—'}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Specjalizacja</p>
-                <p className="font-medium">{selectedDoctor.specialization}</p>
+                <p className="font-medium">{selectedDoctor?.specialization || selectedSpecialization || '—'}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Lekarz</p>
-                <p className="font-medium">{selectedDoctor.name}</p>
+                <p className="font-medium">{selectedDoctor?.name || '—'}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Rodzaj wizyty</p>
@@ -490,9 +597,9 @@ const PatientBooking = () => {
 
             <div className="flex gap-3 pt-4">
               <Button variant="outline" onClick={goBack}>
-                Wróć do edycji
+                Wstecz
               </Button>
-              <Button onClick={handleConfirm} disabled={isSubmitting}>
+              <Button onClick={handleConfirm} disabled={isSubmitting || !selectedDoctor || !selectedDate || !selectedTime}>
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
