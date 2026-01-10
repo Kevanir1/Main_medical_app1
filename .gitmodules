@@ -1,0 +1,3 @@
+[submodule "medical-api"]
+	path = medical-api
+	url = https://github.com/ddmuzyk/medical-api.git
