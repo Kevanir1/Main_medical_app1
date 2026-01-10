@@ -4,9 +4,7 @@ export interface DoctorRegistrationData {
   email: string;
   phone: string;
   pesel: string;
-  passportNumber?: string;
-  birthDate: string;
-  specialization: string;
+  specialization: Specialization;
   password: string;
   licenseNumber: string;
 }

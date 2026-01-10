@@ -12,12 +12,13 @@ import { Specialization } from '@/types/doctor';
 import { AlertCircle, ArrowRight, Phone, Mail, User, Calendar, CreditCard, Stethoscope, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { registerDoctor } from '@/lib/medical-api/user';
+import DoctorRegistrationSummaryDialog from './DoctorRegistrationSummary';
 
 export const DoctorRegistration = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [usePassport, setUsePassport] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof DoctorRegistrationData | 'terms', string>>>({});
   
@@ -27,8 +28,6 @@ export const DoctorRegistration = () => {
     email: '',
     phone: '',
     pesel: '',
-    passportNumber: '',
-    birthDate: '',
     specialization: '',
     password: '',
     licenseNumber: '',
@@ -53,25 +52,7 @@ export const DoctorRegistration = () => {
     } else if (!/^\+?[\d\s-]{9,}$/.test(formData.phone)) {
       newErrors.phone = 'Nieprawidłowy format telefonu';
     }
-    
-    if (usePassport) {
-      if (!formData.passportNumber?.trim()) {
-        newErrors.passportNumber = 'Numer paszportu jest wymagany';
-      }
-    } else {
-      if (!formData.pesel.trim()) {
-        newErrors.pesel = 'PESEL jest wymagany';
-      } else {
-        const peselValidation = validatePesel(formData.pesel);
-        if (!peselValidation.valid) {
-          newErrors.pesel = peselValidation.message;
-        }
-      }
-    }
 
-    if (!formData.birthDate) {
-      newErrors.birthDate = 'Data urodzenia jest wymagana';
-    }
     if (!formData.specialization) {
       newErrors.specialization = 'Specjalizacja jest wymagana';
     }
@@ -102,40 +83,7 @@ export const DoctorRegistration = () => {
       });
       return;
     }
-
-    setIsLoading(true);
-    
-    try {
-      // Prepare API payload
-      const payload = {
-        first_name: formData.firstName,
-        last_name: formData.lastName,
-        email: formData.email,
-        password: formData.password,
-        specialization: specializations[formData.specialization as keyof typeof specializations],
-        license_number: formData.licenseNumber,
-      };
-
-      await registerDoctor(payload);
-      
-      // Store form data and navigate to summary
-      sessionStorage.setItem('doctorRegistration', JSON.stringify(formData));
-      
-      toast({
-        title: "Rejestracja wysłana!",
-        description: "Twój wniosek został przyjęty do weryfikacji.",
-      });
-      
-      navigate('/doctor/register/summary');
-    } catch (error: any) {
-      toast({
-        title: "Błąd rejestracji",
-        description: error.message || "Wystąpił błąd podczas rejestracji",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    setIsDialogOpen(true);
   };
 
   const handleInputChange = (field: keyof DoctorRegistrationData, value: string) => {
@@ -226,69 +174,22 @@ export const DoctorRegistration = () => {
           {renderError('phone')}
         </div>
 
-        {/* ID toggle */}
-        <div className="flex items-center gap-2 py-2">
-          <Checkbox
-            id="usePassport"
-            checked={usePassport}
-            onCheckedChange={(checked) => setUsePassport(checked as boolean)}
-          />
-          <Label htmlFor="usePassport" className="text-sm cursor-pointer">
-            Nie posiadam numeru PESEL (użyj paszportu)
-          </Label>
-        </div>
-
-        {/* PESEL or Passport */}
-        {usePassport ? (
-          <div className="form-field">
-            <Label htmlFor="passport" className="form-label">
-              <CreditCard className="w-4 h-4 inline mr-1" />
-              Numer paszportu
-            </Label>
-            <Input
-              id="passport"
-              placeholder="AB1234567"
-              value={formData.passportNumber}
-              onChange={(e) => handleInputChange('passportNumber', e.target.value)}
-              className={errors.passportNumber ? 'border-destructive' : ''}
-            />
-            {renderError('passportNumber')}
-          </div>
-        ) : (
-          <div className="form-field">
-            <Label htmlFor="pesel" className="form-label">
-              <CreditCard className="w-4 h-4 inline mr-1" />
-              PESEL
-            </Label>
-            <Input
-              id="pesel"
-              placeholder="12345678901"
-              value={formData.pesel}
-              onChange={(e) => handleInputChange('pesel', e.target.value)}
-              maxLength={11}
-              className={errors.pesel ? 'border-destructive' : ''}
-            />
-            {renderError('pesel')}
-          </div>
-        )}
-
-        {/* Birth date */}
         <div className="form-field">
-          <Label htmlFor="birthDate" className="form-label">
-            <Calendar className="w-4 h-4 inline mr-1" />
-            Data urodzenia
+          <Label htmlFor="pesel" className="form-label">
+            <CreditCard className="w-4 h-4 inline mr-1" />
+            PESEL
           </Label>
           <Input
-            id="birthDate"
-            type="date"
-            value={formData.birthDate}
-            onChange={(e) => handleInputChange('birthDate', e.target.value)}
-            className={errors.birthDate ? 'border-destructive' : ''}
+            id="pesel"
+            placeholder="12345678901"
+            value={formData.pesel}
+            onChange={(e) => handleInputChange('pesel', e.target.value)}
+            maxLength={11}
+            className={errors.pesel ? 'border-destructive' : ''}
           />
-          {renderError('birthDate')}
+          {renderError('pesel')}
         </div>
 
-        {/* Specialization */}
         <div className="form-field">
           <Label className="form-label">
             <Stethoscope className="w-4 h-4 inline mr-1" />
@@ -304,7 +205,7 @@ export const DoctorRegistration = () => {
             <SelectContent>
               {Object.keys(specializations).map((spec) => (
                 <SelectItem key={spec} value={spec}>
-                  {spec}
+                  {spec.toLowerCase()}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -374,6 +275,11 @@ export const DoctorRegistration = () => {
           <ArrowRight className="w-4 h-4" />
         </Button>
       </form>
+      <DoctorRegistrationSummaryDialog
+        isOpen={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        formData={formData}
+      />
     </AuthLayout>
   );
 };

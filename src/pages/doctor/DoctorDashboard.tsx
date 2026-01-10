@@ -22,35 +22,13 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { Visit, visitTypeLabels, visitStatusLabels } from '@/types/patient';
-import { getAppointmentsByDoctor, completeAppointment, cancelAppointment } from '@/lib/medical-api/appointment';
+import { useLocalStorageUser } from '@/hooks/use-user';
+import { getAppointmentsByDoctor } from '@/lib/medical-api/appointment';
 import { getPatient } from '@/lib/medical-api/patient';
-import { toast } from 'sonner';
 
-// Helper function to transform API appointment data to Visit interface
-const transformAppointmentToVisit = async (appointment: any): Promise<Visit> => {
-  const patientData = await getPatient(appointment.patient_id);
-  
-  return {
-    id: appointment.id.toString(),
-    patientId: appointment.patient_id.toString(),
-    patient: {
-      id: patientData.id.toString(),
-      firstName: patientData.first_name,
-      lastName: patientData.last_name,
-      pesel: patientData.pesel || '',
-      birthDate: '', // Not stored in database, could be derived from PESEL
-      phone: patientData.phone || '',
-      email: '', // Not returned by API
-    },
-    doctorId: appointment.doctor_id.toString(),
-    date: format(new Date(appointment.appointment_date), 'yyyy-MM-dd'),
-    time: format(new Date(appointment.appointment_date), 'HH:mm'),
-    duration: 30, // Default duration, could be calculated from availability
-    type: 'consultation', // Default type, could be determined from availability or added to appointment
-    status: appointment.status.toLowerCase() as Visit['status'],
-    reason: 'Wizyta lekarska', // Default reason, could be added to appointment table
-  };
-};
+import apiClient from '@/lib/apiClient';
+
+// Visits will be loaded from backend; map DB appointments -> simplified Visit shape
 
 const getStatusColor = (status: Visit['status']) => {
   switch (status) {
@@ -87,54 +65,54 @@ const getTypeColor = (type: Visit['type']) => {
 export default function DoctorDashboard() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [visits, setVisits] = useState<Visit[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isScrolled, setIsScrolled] = useState(false);
+  const { doctor_id } = useLocalStorageUser();
 
-  // Handle scroll to hide/show header
   useEffect(() => {
-    const handleScroll = () => {
-      const scrollTop = window.scrollY;
-      setIsScrolled(scrollTop > 50); // Hide header after scrolling 50px
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  // Fetch appointments on component mount
-  useEffect(() => {
-    const fetchAppointments = async () => {
+    const load = async () => {
       try {
-        setLoading(true);
-        setError(null);
-        
-        const doctorId = localStorage.getItem('doctor_id');
-        if (!doctorId) {
-          setError('Nie znaleziono ID lekarza');
-          return;
-        }
+        if (!doctor_id) return;
 
-        const response = await getAppointmentsByDoctor(parseInt(doctorId));
-        if (response.status === 'success' && response.appointments) {
-          // Transform appointments to Visit format
-          const transformedVisits = await Promise.all(
-            response.appointments.map(transformAppointmentToVisit)
-          );
-          setVisits(transformedVisits);
-        } else {
-          setError('Nie udało się pobrać wizyt');
+        const res = await getAppointmentsByDoctor(doctor_id);
+        if (res && res.status === 'success') {
+          const appointments = res.appointments || [];
+          // enrich with patient details
+          const enriched = await Promise.all(appointments.map(async (a: any) => {
+            let patient = null;
+            try {
+              const p = await getPatient(a.patient_id);
+              patient = p.patient || null;
+            } catch (e) {
+              patient = null;
+            }
+            const dateObj = new Date(a.appointment_date);
+            return {
+              id: String(a.id),
+              patientId: String(a.patient_id),
+              patient: patient ? {
+                id: String(patient.id),
+                firstName: patient.first_name || '',
+                lastName: patient.last_name || '',
+                pesel: patient.pesel || '',
+                birthDate: patient.birth_date || '',
+                phone: patient.phone || '',
+              } : { id: String(a.patient_id), firstName: 'Anon', lastName: '', pesel: '', birthDate: '', phone: '' },
+              doctorId: String(a.doctor_id),
+              date: dateObj.toISOString().slice(0,10),
+              time: dateObj.toTimeString().slice(0,5),
+              duration: a.duration || 30,
+              type: 'consultation',
+              status: a.status || 'scheduled',
+              reason: a.notes || ''
+            } as Visit;
+          }));
+          setVisits(enriched);
         }
-      } catch (err) {
-        console.error('Error fetching appointments:', err);
-        setError('Wystąpił błąd podczas ładowania wizyt');
-      } finally {
-        setLoading(false);
+      } catch (e) {
+        console.error('Error loading appointments', e);
       }
     };
-
-    fetchAppointments();
-  }, []);
+    load();
+  }, [doctor_id]);
 
   const todayVisits = visits.filter(v => v.date === format(selectedDate, 'yyyy-MM-dd'));
   const completedCount = todayVisits.filter(v => v.status === 'completed').length;
@@ -153,101 +131,25 @@ export default function DoctorDashboard() {
     setSelectedDate(newDate);
   };
 
-  const handleStartVisit = async (visitId: string) => {
-    try {
-      // For now, just update local state. In a real implementation, 
-      // you might need a separate API endpoint to start a visit
-      setVisits(visits.map(v => 
-        v.id === visitId ? { ...v, status: 'in-progress' as const } : v
-      ));
-      toast.success('Wizyta została rozpoczęta');
-    } catch (err) {
-      console.error('Error starting visit:', err);
-      toast.error('Nie udało się rozpocząć wizyty');
-    }
-  };
-
   const handleCompleteVisit = async (visitId: string) => {
     try {
-      await completeAppointment(parseInt(visitId));
-      setVisits(visits.map(v => 
-        v.id === visitId ? { ...v, status: 'completed' as const } : v
-      ));
-      toast.success('Wizyta została zakończona');
-    } catch (err) {
-      console.error('Error completing visit:', err);
-      toast.error('Nie udało się zakończyć wizyty');
-    }
+      await apiClient.patch(`/appointment/${visitId}/complete`);
+      setVisits(prev => prev.map(v => v.id === visitId ? { ...v, status: 'completed' } : v));
+    } catch (e) { console.error(e); }
   };
 
   const handleCancelVisit = async (visitId: string) => {
     try {
-      await cancelAppointment(parseInt(visitId));
-      setVisits(visits.map(v => 
-        v.id === visitId ? { ...v, status: 'cancelled' as const } : v
-      ));
-      toast.success('Wizyta została anulowana');
-    } catch (err) {
-      console.error('Error cancelling visit:', err);
-      toast.error('Nie udało się anulować wizyty');
-    }
+      await apiClient.patch(`/appointment/${visitId}/cancel`);
+      setVisits(prev => prev.map(v => v.id === visitId ? { ...v, status: 'cancelled' } : v));
+    } catch (e) { console.error(e); }
   };
-
-  if (loading) {
-    return (
-      <DoctorLayout>
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-              <p className="text-muted-foreground">Ładowanie wizyt...</p>
-            </div>
-          </div>
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        </div>
-      </DoctorLayout>
-    );
-  }
-
-  if (error) {
-    return (
-      <DoctorLayout>
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-              <p className="text-muted-foreground">Wystąpił błąd podczas ładowania danych</p>
-            </div>
-          </div>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center py-12 text-destructive">
-                <p>{error}</p>
-                <Button 
-                  variant="outline" 
-                  className="mt-4"
-                  onClick={() => window.location.reload()}
-                >
-                  Spróbuj ponownie
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </DoctorLayout>
-    );
-  }
 
   return (
     <DoctorLayout>
       <div className="space-y-6">
-        {/* Header - Hidden when scrolled */}
-        <div className={cn(
-          "flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-opacity duration-300",
-          isScrolled && "opacity-0 pointer-events-none"
-        )}>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
             <p className="text-muted-foreground">Przegląd wizyt na wybrany dzień</p>
