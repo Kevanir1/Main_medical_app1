@@ -1,10 +1,10 @@
 export interface Appointment {
-  id: number | string;
+  id: number;
   patientId: number | string;
   doctorId: number | string;
   availabilityId?: number | string;
   appointmentDate: string; // ISO
-  status: string;
+  status: AppointmentStatus;
   createdAt?: string;
 }
 
