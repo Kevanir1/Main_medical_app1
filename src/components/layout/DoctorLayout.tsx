@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { 
   Stethoscope, 
@@ -24,6 +24,9 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
 import { logout } from '@/lib/medical-api/auth';
+import { getDoctor } from '@/lib/medical-api/doctor/doctor';
+import { useLocalStorageUser } from '@/hooks/use-user';
+import { DoctorInfo, specializationToLabel } from '@/types/doctor';
 
 interface DoctorLayoutProps {}
 
@@ -35,14 +38,39 @@ const navigation = [
 ];
 
 export const DoctorLayout = ({}: DoctorLayoutProps) => {
+  const { doctor_id } = useLocalStorageUser();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [doctorInfo, setDoctorInfo] = useState<DoctorInfo | null>(null);
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
+
+  useEffect(() => {
+    const loadDoctorInfo = async () => {
+      try {
+        if (!doctor_id) return;
+        const res = await getDoctor(doctor_id);
+        if (res && res.status === 'success') {
+          const doc = res.doctor;
+          setDoctorInfo({
+            firstName: doc.first_name || '',
+            lastName: doc.last_name || '',
+            email: doc.email || '',
+            doctorId: String(doc.id),
+            specialization: doc.specialization || 'KARDIOLOGIA',
+            licenseNumber: doc.license_number || '',
+          });
+        }
+      } catch (e) {
+        console.error('Failed to load doctor info', e);
+      }
+    };
+    void loadDoctorInfo();
+  }, [doctor_id]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -110,8 +138,8 @@ export const DoctorLayout = ({}: DoctorLayoutProps) => {
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">Dr. Jan Kowalski</p>
-                <p className="text-xs text-muted-foreground truncate">Kardiolog</p>
+                <p className="text-sm font-medium truncate">{doctorInfo ? `Dr. ${doctorInfo.firstName} ${doctorInfo.lastName}` : ''}</p>
+                <p className="text-xs text-muted-foreground truncate">{doctorInfo ? specializationToLabel[doctorInfo.specialization] : 'Ładowanie...'}</p>
               </div>
             </div>
           </div>
@@ -147,7 +175,7 @@ export const DoctorLayout = ({}: DoctorLayoutProps) => {
                         JK
                       </AvatarFallback>
                     </Avatar>
-                    <span className="hidden sm:inline">Dr. Kowalski</span>
+                    <span className="hidden sm:inline">{doctorInfo ? `Dr. ${doctorInfo.firstName} ${doctorInfo.lastName}` : ''}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">

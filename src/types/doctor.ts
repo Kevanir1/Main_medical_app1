@@ -9,6 +9,15 @@ export interface DoctorRegistrationData {
   licenseNumber: string;
 }
 
+export type DoctorInfo = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  doctorId: string;
+  specialization: Specialization;
+  licenseNumber: string;
+}
+
 export const specializations = {
     'KARDIOLOGIA': 'cardiology',
     'DERMATOLOGIA': 'dermatology',
@@ -23,5 +32,18 @@ export const specializations = {
     'MEDYCYNA_RODZINNA': 'general_medicine'
 }
 
+export const specializationToLabel: Record<Specialization, string> = {
+  cardiology: 'Kardiologia',
+  dermatology: 'Dermatologia',
+  neurology: 'Neurologia',
+  pediatrics: 'Pediatria',
+  ophthalmology: 'Okulistyka',
+  orthopedics: 'Ortopedia',
+  psychiatry: 'Psychiatria',
+  rheumatology: 'Reumatologia',
+  gynecology: 'Ginekologia',
+  oncology: 'Onkologia',
+  general_medicine: 'Medycyna rodzinna'
+}
 
-  export type Specialization = typeof specializations[keyof typeof specializations];
+export type Specialization = typeof specializations[keyof typeof specializations];
