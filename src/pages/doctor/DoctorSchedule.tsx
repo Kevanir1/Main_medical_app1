@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { getAppointmentsByDoctor} from '@/lib/medical-api/appointment';
+import { useLocalStorageUser } from '@/hooks/use-user';
 
 // Mock schedule data
 const mockScheduleItems = [
@@ -20,6 +22,8 @@ const mockScheduleItems = [
   { id: '7', date: addDays(new Date(), 1), time: '10:00', duration: 60, patient: 'Ewa Mazur', type: 'procedure' },
   { id: '8', date: addDays(new Date(), 2), time: '08:00', duration: 30, patient: 'Marek Pawlak', type: 'follow-up' },
 ];
+
+
 
 const hours = Array.from({ length: 10 }, (_, i) => `${8 + i}:00`);
 
@@ -37,6 +41,7 @@ const getTypeColor = (type: string) => {
 };
 
 export default function DoctorSchedule() {
+  const { doctor_id } = useLocalStorageUser();
   const [currentDate, setCurrentDate] = useState(new Date());
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
