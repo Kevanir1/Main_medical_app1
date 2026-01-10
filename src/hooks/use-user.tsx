@@ -1,7 +1,7 @@
 export const useLocalStorageUser = () => {
   const patient_id = localStorage.getItem('patient_id');
   const doctor_id = localStorage.getItem('doctor_id');
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('medapp_token');
   const role = localStorage.getItem('role');
   const user_id = localStorage.getItem('user_id');
 

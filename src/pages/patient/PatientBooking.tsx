@@ -219,29 +219,25 @@ const PatientBooking = () => {
 
   const handleTimeSelect = (time: string) => {
     setSelectedTime(time);
-    // if only one doctor for that time, auto-select and proceed
-    const doctorsForTime = slotsMap[time] || [];
-    if (doctorsForTime.length === 1) {
-      const d = doctorsForTime[0];
-      setSelectedDoctor({
-        id: d.doctor_id,
-        user_id: d.doctor_id,
-        first_name: d.first_name,
-        last_name: d.last_name,
-        specialization: d.specialization,
-        license_number: d.license_number,
-        name: `dr ${d.first_name} ${d.last_name}`
-      });
-      setSelectedAvailability({ availability_id: d.availability_id });
-      setStep('details');
-    } else {
-      // multiple doctors: stay on calendar step but show doctor selector below
-      setSelectedDoctor(null);
-    }
+    setSelectedDoctor(null);
+    setSelectedAvailability(null);
   };
 
+  const handleCalendarNext = () => {
+    if (!selectedDoctor) {
+      toast.error('Wybierz lekarza');
+      return;
+    }
+    if (!selectedTime) {
+      toast.error('Wybierz godzinę');
+      return;
+    }
+    setStep('details');
+  };
+
+  // No auto-selection: user must explicitly pick a doctor
   const handleDoctorSelect = (doctor: any) => {
-    setSelectedDoctor({
+    const newDoctor = {
       id: doctor.doctor_id,
       user_id: doctor.doctor_id,
       first_name: doctor.first_name,
@@ -249,16 +245,26 @@ const PatientBooking = () => {
       specialization: doctor.specialization,
       license_number: doctor.license_number,
       name: `dr ${doctor.first_name} ${doctor.last_name}`
+    };
+
+    setSelectedDoctor(prev => {
+      if (prev?.id === newDoctor.id) return prev;
+      return newDoctor;
     });
     setSelectedAvailability({ availability_id: doctor.availability_id });
-    setStep('details');
   };
 
   const handleDetailsSubmit = () => {
+    if (!selectedDoctor) {
+      toast.error('Wybierz lekarza');
+      return;
+    }
+
     if (!reason.trim()) {
       toast.error("Podaj powód wizyty");
       return;
     }
+
     setStep('confirm');
   };
 
@@ -274,10 +280,25 @@ const PatientBooking = () => {
       // Find the availability slot for the selected time
       // Create appointment using selectedAvailability.availability_id
       const appointmentData = {
-        patient_id: Number(localStorage.getItem('patient_id')),
         doctor_id: selectedDoctor.id,
-        availability_id: selectedAvailability.availability_id || selectedAvailability.id
+        availability_id: selectedAvailability.availability_id || selectedAvailability.id,
+        reason: reason || undefined,
+        type: visitType || undefined,
+        specialization: selectedDoctor?.specialization || undefined
       };
+
+      const token = typeof window !== 'undefined' ? localStorage.getItem('medapp_token') : null;
+
+      // Dev debug: log token existence (length only)
+      if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.DEV) {
+        console.debug('createAppointment - token exists?', !!token, 'length:', token ? token.length : 0);
+      }
+
+      if (!token) {
+        toast.error('Zaloguj się ponownie');
+        navigate('/login');
+        return;
+      }
 
       const response = await createAppointment(appointmentData);
       
@@ -289,6 +310,27 @@ const PatientBooking = () => {
         toast.error("Nie udało się utworzyć wizyty");
       }
     } catch (error: any) {
+      // Dev log: response status if present
+      if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.DEV) {
+        console.debug('createAppointment error status:', error?.status);
+      }
+
+      if (error?.status === 401) {
+        // Clear token and force re-login
+        localStorage.removeItem('medapp_token');
+        toast.error('Zaloguj się ponownie');
+        navigate('/login');
+        return;
+      }
+
+      // If backend indicates patient profile missing, guide user to profile page
+      const errMsg = error?.payload?.message || error?.message || '';
+      if (error?.status === 400 && /Patient profile not found/i.test(errMsg)) {
+        toast.error('Profil pacjenta nie został znaleziony. Uzupełnij dane.');
+        navigate('/patient/profile');
+        return;
+      }
+
       console.error('Error creating appointment:', error);
       toast.error(error.message || "Wystąpił błąd podczas tworzenia wizyty");
     } finally {
@@ -429,6 +471,7 @@ const PatientBooking = () => {
 
                       return (
                         <div className="grid gap-4 md:grid-cols-2">
+                          {/* No auto-selection: user must explicitly pick a doctor */}
                           {doctorsForTime.map((doctor) => (
                             <div
                               key={`${doctor.doctor_id}-${doctor.availability_id}`}
@@ -468,7 +511,7 @@ const PatientBooking = () => {
               <Button variant="outline" onClick={goBack}>
                 Wstecz
               </Button>
-              <Button onClick={() => setStep('details')} disabled={!selectedDate || !selectedTime || !selectedDoctor}>
+              <Button onClick={handleCalendarNext} disabled={!selectedTime || !selectedDoctor}>
                 Dalej
               </Button>
             </div>
@@ -547,7 +590,7 @@ const PatientBooking = () => {
               <Button variant="outline" onClick={goBack}>
                 Wstecz
               </Button>
-              <Button onClick={handleDetailsSubmit}>
+              <Button onClick={handleDetailsSubmit} disabled={!selectedDoctor}>
                 Dalej
               </Button>
             </div>

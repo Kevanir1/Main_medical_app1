@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = '/api';
 
 const getUrl = (path: string) => `${API_BASE_URL}${path}`
 
@@ -6,7 +6,7 @@ async function request(path: string, options: RequestInit = {}) {
   const url = getUrl(path);
 
   const token = typeof window !== 'undefined'
-    ? localStorage.getItem('token')
+    ? localStorage.getItem('medapp_token')
     : null;
 
   const headers: Record<string, string> = {

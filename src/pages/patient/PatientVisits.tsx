@@ -17,7 +17,7 @@ import { pl } from "date-fns/locale";
 import { toast } from "sonner";
 import { Visit, visitTypeLabels, visitStatusLabels } from "@/types/patient";
 import { useLocalStorageUser } from "@/hooks/use-user";
-import { getAppointmentsByPatient } from "@/lib/medical-api/appointment";
+import { getAppointmentsByPatient, cancelAppointment } from "@/lib/medical-api/appointment";
 import { getDoctor } from "@/lib/medical-api/doctor/doctor";
 
 // Data loaded from API. Real data replaces former hardcoded mocks.
@@ -40,15 +40,90 @@ const PatientVisits = () => {
     setCancelDialogOpen(true);
   };
 
-  const confirmCancel = () => {
-    if (selectedVisit) {
-      setVisits(visits.map(v => 
-        v.id === selectedVisit.id ? { ...v, status: 'cancelled' as const } : v
-      ));
-      toast.success("Wizyta została odwołana");
+  const loadAppointments = async () => {
+    setLoading(true);
+    setError(null);
+    if (!patient_id) {
+      setError('Brak patient_id w kontekście - TODO: upewnij się, że auth zapisuje patient_id');
+      setLoading(false);
+      return;
     }
-    setCancelDialogOpen(false);
-    setSelectedVisit(null);
+
+    try {
+      const res = await getAppointmentsByPatient(patient_id as number);
+      let appts: any[] = [];
+      if (res && res.status === 'success') appts = res.appointments || [];
+      else if (Array.isArray(res)) appts = res;
+
+      const mapped: Visit[] = appts.map((a: any) => {
+        const dateObj = new Date(a.appointment_date);
+        return {
+          id: String(a.id),
+          patientId: String(a.patient_id),
+          patient: { id: String(a.patient_id), firstName: '', lastName: '', pesel: '', birthDate: '', phone: '' },
+          doctorId: String(a.doctor_id),
+          date: dateObj.toISOString().slice(0,10),
+          time: dateObj.toTimeString().slice(0,5),
+          duration: a.duration || 30,
+          type: a.type || 'consultation',
+          status: a.status || 'scheduled',
+          reason: a.notes || ''
+        } as Visit;
+      });
+
+      setVisits(mapped);
+
+      const uniqueDoctorIds = Array.from(new Set(mapped.map(v => Number(v.doctorId)).filter(Boolean)));
+      const toFetch = uniqueDoctorIds.filter(id => !doctorMap[String(id)]);
+      for (const id of toFetch) {
+        try {
+          const dres = await getDoctor(Number(id));
+          let doc: any = null;
+          if (dres && dres.status === 'success') doc = dres.doctor;
+          else if (dres && dres.doctor) doc = dres.doctor;
+          if (doc) {
+            setDoctorMap(prev => ({ ...prev, [String(id)]: { name: `${doc.first_name || ''} ${doc.last_name || ''}`.trim(), specialization: doc.specialization || '' } }));
+          }
+        } catch (e) {
+          console.error('Failed to load doctor', id, e);
+        }
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Błąd pobierania wizyt');
+    }
+    setLoading(false);
+  };
+
+  const confirmCancel = async () => {
+    if (!selectedVisit) {
+      setCancelDialogOpen(false);
+      return;
+    }
+
+    try {
+      const id = Number(selectedVisit.id);
+      const res = await cancelAppointment(id);
+
+      // dev debug
+      if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.DEV) {
+        console.debug('cancelAppointment', id, (res && res.status) || 'ok');
+      }
+
+      // Expect backend to return { status: 'success' }
+      if (res && (res.status === 'success' || res.cancelled_appointment_id)) {
+        toast.success('Wizyta została odwołana');
+        // refresh list
+        await loadAppointments();
+      } else {
+        toast.error(res?.message || 'Nie udało się odwołać wizyty');
+      }
+    } catch (e: any) {
+      const msg = e?.payload?.message || e?.message || 'Błąd podczas odwoływania wizyty';
+      toast.error(msg);
+    } finally {
+      setCancelDialogOpen(false);
+      setSelectedVisit(null);
+    }
   };
 
   useEffect(() => {

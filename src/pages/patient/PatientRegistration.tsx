@@ -67,22 +67,56 @@ const PatientRegistration = () => {
 
   const handleConfirm = async () => {
     if (!formData) return;
+    try {
+      const response = await registerUser({
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email,
+        password: formData.password,
+        pesel: formData.pesel,
+        phone: formData.phone
+      });
 
-    const response = await registerUser({
-      first_name: formData.firstName,
-      last_name: formData.lastName,
-      email: formData.email,
-      password: formData.password,
-      pesel: formData.pesel,
-      phone: formData.phone
-    });
+      // Expecting success (201) with response containing user_id
+      toast.success("Konto zostało utworzone! Możesz się teraz zalogować.");
+      navigate('/login');
+    } catch (e: any) {
+      // Prefer backend-provided message
+      const status = e?.status || e?.payload?.status || null;
+      const payload = e?.payload || null;
+      const serverMessage = payload?.message || e?.message || '';
 
-    if (!response) {
-      toast.error("Wystąpił błąd podczas rejestracji. Spróbuj ponownie.");
+      // Network error (fetch) or other unexpected
+      if (!status && serverMessage && serverMessage.toLowerCase().includes('failed to fetch')) {
+        toast.error('Nie można połączyć się z serwerem. Sprawdź połączenie i spróbuj ponownie.');
+        return;
+      }
+
+      if (status === 409) {
+        // Conflict - user exists (PESEL/email)
+        toast.error('Pacjent z podanym PESEL / e-mailem już istnieje');
+        return;
+      }
+
+      if (status === 400) {
+        // Validation error - show backend message if available
+        const msg = serverMessage || 'Błąd walidacji formularza. Sprawdź dane i spróbuj ponownie.';
+        toast.error(msg);
+        return;
+      }
+
+      if (status === 500) {
+        toast.error('Wystąpił błąd serwera. Spróbuj ponownie później.');
+        return;
+      }
+
+      // Fallback: show backend message if present, otherwise a generic one
+      if (serverMessage) {
+        toast.error(serverMessage);
+      } else {
+        toast.error('Wystąpił błąd podczas rejestracji. Spróbuj ponownie.');
+      }
     }
-
-    toast.success("Konto zostało utworzone! Możesz się teraz zalogować.");
-    navigate('/login');
   };
 
   if (step === 'summary' && formData) {
