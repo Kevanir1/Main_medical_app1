@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { AdminLayout } from '@/components/layout/AdminLayout';
 import { FileText, Users, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -41,8 +40,7 @@ const recentActivities = [
 
 export const AdminDashboard = () => {
   return (
-    <AdminLayout>
-      <div className="space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">Panel administracyjny</h1>
@@ -140,7 +138,6 @@ export const AdminDashboard = () => {
           </Card>
         </div>
       </div>
-    </AdminLayout>
   );
 };
 
