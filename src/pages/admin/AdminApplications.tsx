@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -104,8 +103,7 @@ export const AdminApplications = () => {
   const processedApps = applications.filter(a => a.status !== 'pending');
 
   return (
-    <AdminLayout>
-      <div className="space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">Wnioski rejestracji lekarzy</h1>
@@ -280,20 +278,13 @@ export const AdminApplications = () => {
                       <div className="font-medium">{selectedApp.pesel}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 rounded-lg border border-border">
-                    <Calendar className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <div className="text-xs text-muted-foreground">Data urodzenia</div>
-                      <div className="font-medium">{new Date(selectedApp.birthDate).toLocaleDateString('pl-PL')}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 rounded-lg border border-border">
+                  {/* <div className="flex items-center gap-3 p-3 rounded-lg border border-border">
                     <Stethoscope className="w-5 h-5 text-muted-foreground" />
                     <div>
                       <div className="text-xs text-muted-foreground">Specjalizacja</div>
                       <div className="font-medium">{selectedApp.specialization}</div>
                     </div>
-                  </div>
+                  </div> */}
                 </div>
               </div>
             )}
@@ -356,7 +347,6 @@ export const AdminApplications = () => {
           </DialogContent>
         </Dialog>
       </div>
-    </AdminLayout>
   );
 };
 

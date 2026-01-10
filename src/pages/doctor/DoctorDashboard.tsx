@@ -14,7 +14,6 @@ import {
   Phone,
   FileText
 } from 'lucide-react';
-import { DoctorLayout } from '@/components/layout/DoctorLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -146,8 +145,7 @@ export default function DoctorDashboard() {
   };
 
   return (
-    <DoctorLayout>
-      <div className="space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -379,6 +377,5 @@ export default function DoctorDashboard() {
           </CardContent>
         </Card>
       </div>
-    </DoctorLayout>
   );
 }

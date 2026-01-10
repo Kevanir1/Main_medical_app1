@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -111,8 +110,7 @@ export const AdminUsers = () => {
   }, []);
 
   return (
-    <AdminLayout>
-      <div className="space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">Zarządzanie użytkownikami</h1>
@@ -352,7 +350,6 @@ export const AdminUsers = () => {
           </DialogContent>
         </Dialog> */}
       </div>
-    </AdminLayout>
   );
 };
 

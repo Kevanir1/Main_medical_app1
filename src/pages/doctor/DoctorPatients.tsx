@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Search, User, Phone, Mail, Calendar, FileText, ChevronRight } from 'lucide-react';
-import { DoctorLayout } from '@/components/layout/DoctorLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -85,8 +84,7 @@ export default function DoctorPatients() {
   };
 
   return (
-    <DoctorLayout>
-      <div className="space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -231,6 +229,5 @@ export default function DoctorPatients() {
           </DialogContent>
         </Dialog>
       </div>
-    </DoctorLayout>
   );
 }

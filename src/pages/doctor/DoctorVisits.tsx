@@ -9,7 +9,6 @@ import {
   FileText,
   Clock
 } from 'lucide-react';
-import { DoctorLayout } from '@/components/layout/DoctorLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -109,8 +108,7 @@ export default function DoctorVisits() {
   });
 
   return (
-    <DoctorLayout>
-      <div className="space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">Historia wizyt</h1>
@@ -230,6 +228,5 @@ export default function DoctorVisits() {
           </CardContent>
         </Card>
       </div>
-    </DoctorLayout>
   );
 }
