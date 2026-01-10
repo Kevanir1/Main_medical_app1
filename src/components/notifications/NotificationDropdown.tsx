@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Bell, Check, X, Calendar, FileText, AlertCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Bell, X, Calendar, FileText, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -11,53 +11,20 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { formatDistanceToNow } from 'date-fns';
+import { getNotifications, markNotificationAsRead } from '@/lib/medical-api/notification';
+import { useLocalStorageUser } from '@/hooks/use-user';
 
-export interface Notification {
-  id: string;
+export interface NotificationItem {
+  id: number;
   type: 'visit' | 'prescription' | 'system' | 'reminder';
   title: string;
   message: string;
-  timestamp: Date;
+  timestamp: string;
   read: boolean;
 }
 
-// Mock notifications for demonstration
-const initialNotifications: Notification[] = [
-  {
-    id: '1',
-    type: 'visit',
-    title: 'Nowa wizyta',
-    message: 'Pacjent Jan Nowak umówił wizytę na 15.01.2024',
-    timestamp: new Date(Date.now() - 1000 * 60 * 5),
-    read: false,
-  },
-  {
-    id: '2',
-    type: 'reminder',
-    title: 'Przypomnienie',
-    message: 'Za 30 minut wizyta z pacjentem Anna Kowalska',
-    timestamp: new Date(Date.now() - 1000 * 60 * 30),
-    read: false,
-  },
-  {
-    id: '3',
-    type: 'prescription',
-    title: 'E-recepta wystawiona',
-    message: 'Recepta dla Piotr Wiśniewski została wystawiona',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60),
-    read: true,
-  },
-  {
-    id: '4',
-    type: 'system',
-    title: 'Aktualizacja systemu',
-    message: 'System zostanie zaktualizowany o 23:00',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-    read: true,
-  },
-];
-
-const getNotificationIcon = (type: Notification['type']) => {
+const getNotificationIcon = (type: NotificationItem['type']) => {
   switch (type) {
     case 'visit':
       return Calendar;
@@ -65,33 +32,38 @@ const getNotificationIcon = (type: Notification['type']) => {
       return FileText;
     case 'reminder':
       return AlertCircle;
-    case 'system':
     default:
-      return Bell;
+      return AlertCircle;
   }
 };
 
-const formatTimeAgo = (date: Date): string => {
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  const minutes = Math.floor(diff / (1000 * 60));
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-  if (minutes < 1) return 'Teraz';
-  if (minutes < 60) return `${minutes} min temu`;
-  if (hours < 24) return `${hours} godz. temu`;
-  return `${days} dni temu`;
-};
-
 export const NotificationDropdown = () => {
-  const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
+  const { user_id } = useLocalStorageUser();
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(n => (n.id === id ? { ...n, read: true } : n))
-    );
+  useEffect(() => {
+    if (!user_id) return;
+    const load = async () => {
+      try {
+        const res = await getNotifications(user_id);
+        if (res && res.status === 'success') {
+          setNotifications(res.notifications || []);
+        }
+      } catch (err) {
+        console.error('Failed to load notifications', err);
+      }
+    };
+    void load();
+  }, [user_id]);
+
+  const markAsRead = async (id: number) => {
+    try {
+      await markNotificationAsRead(id);
+      setNotifications(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)));
+    } catch (err) {
+      console.error('Failed to mark notification read', err);
+    }
   };
 
   const markAllAsRead = () => {
@@ -173,7 +145,7 @@ export const NotificationDropdown = () => {
                       {notification.message}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {formatTimeAgo(notification.timestamp)}
+                      {formatDistanceToNow(new Date(notification.timestamp), { addSuffix: true })}
                     </p>
                   </div>
                   {!notification.read && (

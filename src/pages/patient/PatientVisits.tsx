@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,69 +16,21 @@ import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { toast } from "sonner";
 import { Visit, visitTypeLabels, visitStatusLabels } from "@/types/patient";
+import { useLocalStorageUser } from "@/hooks/use-user";
+import { getAppointmentsByPatient } from "@/lib/medical-api/appointment";
+import { getDoctor } from "@/lib/medical-api/doctor/doctor";
 
-const allVisits: Visit[] = [
-  {
-    id: '1',
-    patientId: 'p1',
-    patient: { id: 'p1', firstName: 'Jan', lastName: 'Kowalski', pesel: '90010112345', birthDate: '1990-01-01', phone: '123456789' },
-    doctorId: 'd1',
-    date: format(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
-    time: '10:00',
-    duration: 30,
-    type: 'consultation',
-    status: 'scheduled',
-    reason: 'Konsultacja ogólna'
-  },
-  {
-    id: '2',
-    patientId: 'p1',
-    patient: { id: 'p1', firstName: 'Jan', lastName: 'Kowalski', pesel: '90010112345', birthDate: '1990-01-01', phone: '123456789' },
-    doctorId: 'd2',
-    date: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
-    time: '14:30',
-    duration: 20,
-    type: 'follow-up',
-    status: 'scheduled',
-    reason: 'Wizyta kontrolna'
-  },
-  {
-    id: '3',
-    patientId: 'p1',
-    patient: { id: 'p1', firstName: 'Jan', lastName: 'Kowalski', pesel: '90010112345', birthDate: '1990-01-01', phone: '123456789' },
-    doctorId: 'd1',
-    date: format(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
-    time: '09:00',
-    duration: 30,
-    type: 'consultation',
-    status: 'completed',
-    reason: 'Badania okresowe',
-    notes: 'Zalecono badania laboratoryjne'
-  },
-  {
-    id: '4',
-    patientId: 'p1',
-    patient: { id: 'p1', firstName: 'Jan', lastName: 'Kowalski', pesel: '90010112345', birthDate: '1990-01-01', phone: '123456789' },
-    doctorId: 'd2',
-    date: format(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
-    time: '11:00',
-    duration: 45,
-    type: 'procedure',
-    status: 'completed',
-    reason: 'EKG',
-    notes: 'Wynik prawidłowy'
-  }
-];
-
-const doctorInfo: Record<string, { name: string; specialization: string }> = {
-  'd1': { name: 'dr Anna Nowak', specialization: 'Internista' },
-  'd2': { name: 'dr Piotr Wiśniewski', specialization: 'Kardiolog' }
-};
+// Data loaded from API. Real data replaces former hardcoded mocks.
 
 const PatientVisits = () => {
-  const [visits, setVisits] = useState(allVisits);
+  const [visits, setVisits] = useState<Visit[]>([]);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [doctorMap, setDoctorMap] = useState<Record<string, { name: string; specialization: string }>>({});
+
+  const { patient_id } = useLocalStorageUser();
 
   const upcomingVisits = visits.filter(v => v.status === 'scheduled');
   const pastVisits = visits.filter(v => v.status === 'completed' || v.status === 'cancelled' || v.status === 'no-show');
@@ -99,6 +51,65 @@ const PatientVisits = () => {
     setSelectedVisit(null);
   };
 
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      if (!patient_id) {
+        setError('Brak patient_id w kontekście - TODO: upewnij się, że auth zapisuje patient_id');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await getAppointmentsByPatient(patient_id as number);
+        let appts: any[] = [];
+        if (res && res.status === 'success') appts = res.appointments || [];
+        else if (Array.isArray(res)) appts = res;
+
+        const mapped: Visit[] = appts.map((a: any) => {
+          const dateObj = new Date(a.appointment_date);
+          return {
+            id: String(a.id),
+            patientId: String(a.patient_id),
+            patient: { id: String(a.patient_id), firstName: '', lastName: '', pesel: '', birthDate: '', phone: '' },
+            doctorId: String(a.doctor_id),
+            date: dateObj.toISOString().slice(0,10),
+            time: dateObj.toTimeString().slice(0,5),
+            duration: a.duration || 30,
+            type: a.type || 'consultation',
+            status: a.status || 'scheduled',
+            reason: a.notes || ''
+          } as Visit;
+        });
+
+        setVisits(mapped);
+
+        const uniqueDoctorIds = Array.from(new Set(mapped.map(v => Number(v.doctorId)).filter(Boolean)));
+        const toFetch = uniqueDoctorIds.filter(id => !doctorMap[String(id)]);
+        for (const id of toFetch) {
+          try {
+            const dres = await getDoctor(Number(id));
+            let doc: any = null;
+            if (dres && dres.status === 'success') doc = dres.doctor;
+            else if (dres && dres.doctor) doc = dres.doctor;
+            if (doc) {
+              setDoctorMap(prev => ({ ...prev, [String(id)]: { name: `${doc.first_name || ''} ${doc.last_name || ''}`.trim(), specialization: doc.specialization || '' } }));
+            }
+          } catch (e) {
+            console.error('Failed to load doctor', id, e);
+          }
+        }
+      } catch (e: any) {
+        setError(e?.message || 'Błąd pobierania wizyt');
+      }
+      setLoading(false);
+    };
+
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient_id]);
+
   const VisitCard = ({ visit, showCancel = false }: { visit: Visit; showCancel?: boolean }) => (
     <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
       <div className="flex items-center gap-4">
@@ -106,9 +117,9 @@ const PatientVisits = () => {
           <User className="w-6 h-6 text-primary" />
         </div>
         <div>
-          <p className="font-medium">{doctorInfo[visit.doctorId]?.name}</p>
+          <p className="font-medium">{doctorMap[visit.doctorId]?.name || 'Lekarz'}</p>
           <p className="text-sm text-muted-foreground">
-            {doctorInfo[visit.doctorId]?.specialization}
+            {doctorMap[visit.doctorId]?.specialization || ''}
           </p>
           <div className="flex items-center gap-2 mt-1">
             <Badge variant="outline">{visitTypeLabels[visit.type]}</Badge>
@@ -152,6 +163,16 @@ const PatientVisits = () => {
         <h1 className="text-2xl font-bold">Moje wizyty</h1>
         <p className="text-muted-foreground">Historia i nadchodzące wizyty</p>
       </div>
+
+      {loading ? (
+        <Card>
+          <CardContent>Ładowanie wizyt...</CardContent>
+        </Card>
+      ) : error ? (
+        <Card>
+          <CardContent className="text-destructive">{error}</CardContent>
+        </Card>
+      ) : null}
 
       <Tabs defaultValue="upcoming">
         <TabsList>
@@ -209,7 +230,7 @@ const PatientVisits = () => {
           <DialogHeader>
             <DialogTitle>Odwołaj wizytę</DialogTitle>
             <DialogDescription>
-              Czy na pewno chcesz odwołać wizytę u {selectedVisit && doctorInfo[selectedVisit.doctorId]?.name} w dniu{" "}
+              Czy na pewno chcesz odwołać wizytę u {selectedVisit && (doctorMap[selectedVisit.doctorId]?.name || 'Lekarz')} w dniu{" "}
               {selectedVisit && format(new Date(selectedVisit.date), 'd MMMM yyyy', { locale: pl })}?
             </DialogDescription>
           </DialogHeader>
