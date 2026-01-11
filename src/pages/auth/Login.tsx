@@ -62,10 +62,24 @@ export default function Login() {
       }
     } catch (error: any) {
       console.error('Login error:', error);
-      setError({
-        code: 'server_error',
-        message: 'Wystąpił błąd serwera. Spróbuj ponownie.'
-      });
+      
+      // Handle specific HTTP status codes
+      if (error.status === 401) {
+        setError({
+          code: 'invalid_credentials',
+          message: 'Nieprawidłowy e-mail lub hasło'
+        });
+      } else if (error.status === 500) {
+        setError({
+          code: 'server_error',
+          message: 'Błąd serwera'
+        });
+      } else {
+        setError({
+          code: 'unknown_error',
+          message: error.message || 'Wystąpił błąd. Spróbuj ponownie.'
+        });
+      }
     } finally {
       setIsLoading(false);
     }

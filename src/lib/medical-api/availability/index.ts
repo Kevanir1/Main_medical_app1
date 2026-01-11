@@ -1,6 +1,6 @@
 import { get, post, patch, del } from "../../apiClient"
 
-const BASE_PATH = '/availability';
+const BASE_PATH = '/availability/';
 
 type CreateAvailabilityPayload = {
   doctor_Id: number;
@@ -18,8 +18,18 @@ export const getDoctorAvailability = async (doctorId: number) => {
 }
 
 export const getAvailabilitiesBySpecializationAndDate = async (specialization: string, date: string) => {
-  const params = `?specialization=${encodeURIComponent(specialization)}&date=${encodeURIComponent(date)}`;
-  return await get(`${BASE_PATH}/${params}`);
+  const url = `${BASE_PATH}?specialization=${encodeURIComponent(specialization)}&date=${encodeURIComponent(date)}`;
+  
+  // Debug logging in development
+  if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+    console.debug('[availability API] GET request:', {
+      url,
+      specialization,
+      date
+    });
+  }
+  
+  return await get(url);
 }
 
 export const updateDoctorAvailability = async (availabilityId: number, payload: Partial<CreateAvailabilityPayload>) => {

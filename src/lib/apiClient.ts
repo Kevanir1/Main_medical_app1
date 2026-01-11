@@ -5,6 +5,15 @@ const getUrl = (path: string) => `${API_BASE_URL}${path}`
 async function request(path: string, options: RequestInit = {}) {
   const url = getUrl(path);
 
+  // Debug logging in development
+  if (import.meta.env.DEV) {
+    console.debug('[apiClient] Making request:', {
+      method: options.method || 'GET',
+      url: url,
+      path: path
+    });
+  }
+
   const token = typeof window !== 'undefined'
     ? localStorage.getItem('medapp_token')
     : null;
@@ -32,6 +41,16 @@ async function request(path: string, options: RequestInit = {}) {
   }
 
   if (!res.ok) {
+    // Debug logging in development
+    if (import.meta.env.DEV) {
+      console.debug('[apiClient] Request failed:', {
+        url: url,
+        status: res.status,
+        statusText: res.statusText,
+        payload: payload
+      });
+    }
+
     const message =
       payload && payload.message
         ? payload.message

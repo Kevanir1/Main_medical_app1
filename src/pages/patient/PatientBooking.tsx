@@ -15,7 +15,7 @@ import { VisitType, visitTypeLabels } from "@/types/patient";
 import { usePatient } from "@/contexts/PatientContext";
 import { cn } from "@/lib/utils";
 import { getAllSpecializations, getDoctorsBySpecialization } from "@/lib/medical-api/doctor/doctor";
-import { getDoctorAvailability } from "@/lib/medical-api/availability";
+import { getDoctorAvailability, getAvailabilitiesBySpecializationAndDate } from "@/lib/medical-api/availability";
 import { createAppointment } from "@/lib/medical-api/appointment";
 
 interface Doctor {
@@ -45,6 +45,7 @@ const PatientBooking = () => {
   const [step, setStep] = useState<Step>('specialization');
   const [selectedSpecialization, setSelectedSpecialization] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [selectedAvailability, setSelectedAvailability] = useState<any | null>(null);
@@ -59,6 +60,9 @@ const PatientBooking = () => {
   const [availabilitiesRaw, setAvailabilitiesRaw] = useState<any[]>([]);
   const [slotsMap, setSlotsMap] = useState<Record<string, Array<any>>>({});
   const [loadingAvailabilities, setLoadingAvailabilities] = useState<boolean>(false);
+
+  // Computed value - availableTimes from slotsMap
+  const availableTimes = Object.keys(slotsMap).sort();
 
   // Load specializations on component mount
   useEffect(() => {
@@ -104,10 +108,34 @@ const PatientBooking = () => {
     void loadDoctors();
   }, [selectedSpecialization]);
 
+  // Helper: extract HH:mm from various datetime formats
+  const extractTimeHHmm = (value: unknown): string | null => {
+    if (!value) return null;
+    const str = String(value);
+    
+    // ISO format with T: "2026-01-13T09:00:00" or "2026-01-13T09:00:00.000Z"
+    if (str.includes('T')) {
+      const match = str.match(/T(\d{2}):(\d{2})/);
+      if (match) return `${match[1]}:${match[2]}`;
+    }
+    
+    // SQL format: "2026-01-13 09:00:00"
+    if (/^\d{4}-\d{2}-\d{2}\s/.test(str)) {
+      const match = str.match(/\s(\d{2}):(\d{2})/);
+      if (match) return `${match[1]}:${match[2]}`;
+    }
+    
+    // RFC1123 or any other format with HH:mm pattern
+    const match = str.match(/(\d{2}):(\d{2})/);
+    if (match) return `${match[1]}:${match[2]}`;
+    
+    return null;
+  };
+
   // Load availabilities for specialization + date when both selected
   useEffect(() => {
     const loadAvailabilities = async () => {
-      if (!selectedSpecialization || !selectedDate) {
+      if (!selectedSpecialization || !selectedDateStr) {
         setAvailabilitiesRaw([]);
         setSlotsMap({});
         return;
@@ -115,79 +143,90 @@ const PatientBooking = () => {
 
       setLoadingAvailabilities(true);
       try {
-        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        // OPTIMIZED: Use single endpoint for specialization + date
+        // instead of fetching per-doctor
+        try {
+          const resp = await getAvailabilitiesBySpecializationAndDate(selectedSpecialization, selectedDateStr);
+          
+          // JEDNO miejsce z fallbackami
+          const items =
+            resp?.availabilities ??
+            resp?.data?.availabilities ??
+            resp?.payload?.availabilities ??
+            resp?.data ??
+            [];
+          
+          // Wymuś tablicę
+          const list = Array.isArray(items) ? items : [];
 
-        // Ensure we have doctors for the specialization
-        let localDoctors = doctors;
-        if (!localDoctors || localDoctors.length === 0) {
-          const resp = await getDoctorsBySpecialization(selectedSpecialization);
-          localDoctors = resp?.doctors || [];
-          const transformed = localDoctors.map((d: any) => ({ ...d, name: `dr ${d.first_name} ${d.last_name}` }));
-          setDoctors(transformed);
-          localDoctors = transformed;
-        }
-
-        // Fetch availability for each doctor in parallel
-        const results = await Promise.allSettled(localDoctors.map(async (doc: any) => {
-          const docId = doc.id ?? doc.doctor_id;
-          try {
-            const resp = await getDoctorAvailability(docId);
-            return { doctor: doc, availability: resp?.availability || [] };
-          } catch (err: any) {
-            // Treat 404 as empty availability (wrong/missing endpoint), don't surface toast
-            const status = err?.response?.status ?? err?.status;
-            if (status === 404) return { doctor: doc, availability: [] };
-            // otherwise propagate rejection to be handled below
-            throw err;
+          // Zawsze loguj (bez warunków DEV) - JEDNO miejsce
+          console.log('[availability] items.length=', list.length);
+          if (list.length > 0) {
+            console.log('[availability] first 3 start_times=', list.slice(0, 3).map(a => a?.start_time));
           }
-        }));
 
-        let hadNon404Error = false;
-        const allItems: any[] = [];
-
-        for (const r of results) {
-          if (r.status === 'fulfilled') {
-            const { doctor, availability } = r.value;
-            // attach doctor info to each availability item
-            availability.forEach((a: any) => {
-              allItems.push({ ...a, doctor });
-            });
-          } else {
-            const reason = r.reason as any;
-            const status = reason?.response?.status ?? reason?.status;
-            if (status === 404) {
-              // skip
-            } else {
-              hadNon404Error = true;
+          // Build slots map grouped by time
+          const map: Record<string, Array<any>> = {};
+          for (const a of list) {
+            // Filtruj TYLKO gdy is_available === false
+            if (a?.is_available === false) continue;
+            
+            // Użyj uniwersalnego helpera
+            const time = extractTimeHHmm(a?.start_time);
+            
+            if (!time) {
+              console.warn('[availability] Cannot extract time from:', a?.start_time);
+              continue;
             }
+            
+            map[time] = map[time] || [];
+            map[time].push({
+              availability_id: a.availability_id,
+              doctor_id: a.doctor?.doctor_id || a.doctor_id,
+              first_name: a.doctor?.first_name || '',
+              last_name: a.doctor?.last_name || '',
+              specialization: a.doctor?.specialization || '',
+              license_number: a.doctor?.license_number || ''
+            });
+          }
+
+          // Log PO zbudowaniu mapy
+          console.log('[availability] slots keys=', Object.keys(map).sort());
+
+          setSlotsMap(map);
+          setAvailabilitiesRaw(list);
+        } catch (error: any) {
+          // Log error details in development
+          if (import.meta.env.DEV) {
+            console.debug('[PatientBooking] Error details:', {
+              status: error?.status,
+              message: error?.message,
+              payload: error?.payload
+            });
+          }
+
+          // Handle 401 - session expired, redirect to login
+          if (error?.status === 401) {
+            toast.error('Sesja wygasła, zaloguj się ponownie');
+            localStorage.removeItem('medapp_token');
+            navigate('/login');
+            return;
+          }
+
+          // Handle 404 or empty results gracefully - not an error, just no availabilities
+          if (error?.status === 404) {
+            console.warn('[PatientBooking] No availabilities found for specialization/date');
+            setAvailabilitiesRaw([]);
+            setSlotsMap({});
+          } else {
+            console.error('[PatientBooking] Error loading availabilities:', error);
+            toast.error('Wystąpił błąd podczas pobierania dostępności');
+            setAvailabilitiesRaw([]);
+            setSlotsMap({});
           }
         }
-
-        if (hadNon404Error) {
-          toast.error('Wystąpił błąd podczas pobierania dostępności');
-        }
-
-        // Filter by selected date and build slots map
-        setAvailabilitiesRaw(allItems);
-        const map: Record<string, Array<any>> = {};
-        allItems.forEach((a: any) => {
-          if (!a.is_available) return;
-          const aDate = format(new Date(a.start_time), 'yyyy-MM-dd');
-          if (aDate !== dateStr) return;
-          const time = format(new Date(a.start_time), 'HH:mm');
-          map[time] = map[time] || [];
-          map[time].push({
-            availability_id: a.availability_id ?? a.id,
-            doctor_id: a.doctor?.id ?? a.doctor?.doctor_id ?? a.doctor_id,
-            first_name: a.doctor?.first_name ?? '',
-            last_name: a.doctor?.last_name ?? '',
-            specialization: a.doctor?.specialization ?? '',
-            license_number: a.doctor?.license_number ?? ''
-          });
-        });
-        setSlotsMap(map);
       } catch (e) {
-        console.error('Error loading availabilities by fetching per-doctor', e);
+        console.error('Error loading availabilities', e);
         toast.error('Wystąpił błąd podczas pobierania dostępności');
         setAvailabilitiesRaw([]);
         setSlotsMap({});
@@ -197,22 +236,21 @@ const PatientBooking = () => {
     };
 
     void loadAvailabilities();
-  }, [selectedSpecialization, selectedDate]);
-
-  // Get available times from slotsMap for selected date
-  const availableTimes = selectedDate ? Object.keys(slotsMap).sort() : [];
+  }, [selectedSpecialization, selectedDateStr, navigate]);
 
   const handleSpecializationSelect = (spec: string) => {
     setSelectedSpecialization(spec);
     // move to date selection step
     setStep('calendar');
     setSelectedDate(undefined);
+    setSelectedDateStr(null);
     setSelectedTime(null);
     setSelectedDoctor(null);
   };
 
   const handleDateSelect = (date: Date | undefined) => {
     setSelectedDate(date);
+    setSelectedDateStr(date ? format(date, 'yyyy-MM-dd') : null);
     setSelectedTime(null);
     setSelectedDoctor(null);
   };

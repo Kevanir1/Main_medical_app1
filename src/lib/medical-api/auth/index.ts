@@ -8,6 +8,14 @@ export const login = async (email: string, password: string) => {
     if (res.doctor_id) localStorage.setItem('doctor_id', String(res.doctor_id));
     localStorage.setItem('user_id', String(res.user_id || ''));
     localStorage.setItem('role', res.role || '');
+    
+    // Debug logging in development
+    if (import.meta.env.DEV) {
+      console.debug('[auth] Token saved:', {
+        tokenExists: !!res.token,
+        tokenLength: res.token?.length || 0
+      });
+    }
   }
   return res;
 }
